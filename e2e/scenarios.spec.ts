@@ -15,6 +15,12 @@ const attrs = (request: CapturedRequest): Record<string, string> =>
     JSON.parse(request.fields.attributes ?? '{}') as Record<string, string>;
 const isFeedback = (request: CapturedRequest): boolean => 'title' in request.fields;
 const isCrash = (request: CapturedRequest): boolean => !isFeedback(request);
+/** Crashpad names the process type `process_type` on recent Electron and `ptype` on older Linux builds. */
+const processType = (request: CapturedRequest): string | undefined =>
+    request.fields.process_type ?? request.fields.ptype;
+/** Assertion message listing what actually arrived (helps diagnose older Electron/Linux uploads). */
+const fieldsOf = (request: CapturedRequest): string =>
+    `received fields: ${Object.keys(request.fields).sort().join(', ')}`;
 
 describe('@bugsplat/electron end-to-end (example app)', () => {
     let crashpad: CaptureServer;
@@ -137,7 +143,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
     it('main-crash: native crash in main uploads a minidump with identity crash keys', async () => {
         launch('main-crash');
         const crash = await crashpad.waitFor();
-        expect(crash.fields.process_type).toBe('browser');
+        expect(processType(crash), fieldsOf(crash)).toBe('browser');
         expect(crash.fields.prod).toBe('Electron');
         expect(crash.fields.ver).toBe(electronVersion);
         expectIdentity(crash.fields, true);
@@ -149,7 +155,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
     it('renderer-crash: renderer minidump carries identity applied through the preload', async () => {
         launch('renderer-crash');
         const crash = await crashpad.waitFor();
-        expect(crash.fields.process_type).toBe('renderer');
+        expect(processType(crash), fieldsOf(crash)).toBe('renderer');
         expectIdentity(crash.fields, true);
         expect(crash.fields.page).toBe('index');
         expect(crash.files.upload_file_minidump?.magic).toBe('MDMP');
@@ -163,7 +169,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         expect(report.fields.email).toBe('page@bugsplat.com');
         expect(attrs(report).plan).toBe('pro');
         const crash = await crashpad.waitFor();
-        expect(crash.fields.process_type).toBe('renderer');
+        expect(processType(crash), fieldsOf(crash)).toBe('renderer');
         expect(crash.fields.email).toBe('page@bugsplat.com');
         expect(crash.fields.plan).toBe('pro');
     });
@@ -171,7 +177,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
     it('utility-crash: crashes in utility processes are captured natively', async () => {
         launch('utility-crash');
         const crash = await crashpad.waitFor();
-        expect(crash.fields.process_type).toBe('utility');
+        expect(processType(crash), fieldsOf(crash)).toBe('utility');
         expect(crash.fields.product).toBe('bugsplat-electron-example');
         expect(crash.fields.version).toBe('1.0.0');
         expect(crash.files.upload_file_minidump?.magic).toBe('MDMP');
@@ -182,7 +188,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         async () => {
             launch('addon-crash');
             const crash = await crashpad.waitFor();
-            expect(crash.fields.process_type).toBe('browser');
+            expect(processType(crash), fieldsOf(crash)).toBe('browser');
             expect(crash.files.upload_file_minidump?.magic).toBe('MDMP');
         },
     );
@@ -192,7 +198,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         async () => {
             launch('renderer-oom');
             const crash = await crashpad.waitFor(
-                (request) => request.fields.process_type === 'renderer',
+                (request) => processType(request) === 'renderer',
                 90_000,
             );
             const keys = Object.keys(crash.fields);
