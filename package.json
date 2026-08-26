@@ -1,0 +1,150 @@
+{
+    "name": "@bugsplat/electron",
+    "version": "0.0.0-development",
+    "description": "BugSplat crash and error reporting for Electron: native crashes, JavaScript errors, hangs and OOMs from one init()",
+    "license": "MIT",
+    "author": "BugSplat <support@bugsplat.com> (https://bugsplat.com)",
+    "homepage": "https://github.com/BugSplat-Git/bugsplat-electron#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/BugSplat-Git/bugsplat-electron.git"
+    },
+    "bugs": {
+        "url": "https://github.com/BugSplat-Git/bugsplat-electron/issues"
+    },
+    "type": "commonjs",
+    "keywords": [
+        "bugsplat",
+        "electron",
+        "crash",
+        "crashpad",
+        "minidump",
+        "error",
+        "reporting",
+        "unhandled",
+        "exception",
+        "oom",
+        "unresponsive"
+    ],
+    "main": "./dist/main.js",
+    "module": "./dist/main.mjs",
+    "types": "./dist/main.d.ts",
+    "exports": {
+        ".": {
+            "import": {
+                "types": "./dist/main.d.mts",
+                "default": "./dist/main.mjs"
+            },
+            "require": {
+                "types": "./dist/main.d.ts",
+                "default": "./dist/main.js"
+            }
+        },
+        "./main": {
+            "import": {
+                "types": "./dist/main.d.mts",
+                "default": "./dist/main.mjs"
+            },
+            "require": {
+                "types": "./dist/main.d.ts",
+                "default": "./dist/main.js"
+            }
+        },
+        "./renderer": {
+            "import": {
+                "types": "./dist/renderer.d.mts",
+                "default": "./dist/renderer.mjs"
+            },
+            "require": {
+                "types": "./dist/renderer.d.ts",
+                "default": "./dist/renderer.js"
+            },
+            "default": "./dist/renderer.js"
+        },
+        "./preload": {
+            "types": "./dist/preload.d.ts",
+            "default": "./dist/preload.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "typesVersions": {
+        "*": {
+            "main": [
+                "./dist/main.d.ts"
+            ],
+            "renderer": [
+                "./dist/renderer.d.ts"
+            ],
+            "preload": [
+                "./dist/preload.d.ts"
+            ]
+        }
+    },
+    "sideEffects": [
+        "./dist/preload.js"
+    ],
+    "files": [
+        "dist"
+    ],
+    "publishConfig": {
+        "access": "public",
+        "provenance": true
+    },
+    "engines": {
+        "node": ">=22.12.0"
+    },
+    "workspaces": [
+        "example"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "prepack": "npm run build",
+        "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.preload.json --noEmit",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:dist": "vitest run --config vitest.dist.config.mts",
+        "check:exports": "attw --pack . && publint",
+        "build:example": "npm run build -w example",
+        "pree2e": "npm run build && npm run build:example",
+        "e2e": "vitest run --config vitest.e2e.config.mts",
+        "e2e:live": "vitest run --config vitest.live.config.mts",
+        "start": "npm run start -w example"
+    },
+    "peerDependencies": {
+        "@bugsplat/symbol-upload": ">=10.0.0",
+        "bugsplat": "^9.1.1",
+        "electron": ">=35.0.0"
+    },
+    "peerDependenciesMeta": {
+        "@bugsplat/symbol-upload": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@arethetypeswrong/cli": "^0.18.5",
+        "@bugsplat/js-api-client": "^15.6.0",
+        "@eslint/js": "^10.0.1",
+        "@semantic-release/changelog": "^7.0.0",
+        "@semantic-release/git": "^11.0.1",
+        "@semantic-release/github": "^12.0.9",
+        "@semantic-release/npm": "^13.1.5",
+        "@types/node": "^24.9.0",
+        "bugsplat": "^9.1.1",
+        "dotenv": "^17.4.2",
+        "electron": "^44.0.0",
+        "eslint": "^10.9.1",
+        "eslint-config-prettier": "^10.1.8",
+        "happy-dom": "^20.11.6",
+        "prettier": "^3.9.6",
+        "publint": "^0.3.24",
+        "semantic-release": "^25.0.9",
+        "tsup": "^8.5.1",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.68.0",
+        "vitest": "^4.1.11"
+    }
+}

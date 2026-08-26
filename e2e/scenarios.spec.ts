@@ -1,0 +1,232 @@
+import { existsSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+    electronMajor,
+    electronVersion,
+    exampleAddon,
+    exampleMain,
+    launchExample,
+    type LaunchOptions,
+    type RunningApp,
+} from './launch';
+import { startCaptureServer, type CaptureServer, type CapturedRequest } from './servers';
+
+const attrs = (request: CapturedRequest): Record<string, string> =>
+    JSON.parse(request.fields.attributes ?? '{}') as Record<string, string>;
+const isFeedback = (request: CapturedRequest): boolean => 'title' in request.fields;
+const isCrash = (request: CapturedRequest): boolean => !isFeedback(request);
+
+describe('@bugsplat/electron end-to-end (example app)', () => {
+    let crashpad: CaptureServer;
+    let js: CaptureServer;
+    let app: RunningApp | null = null;
+
+    beforeEach(async () => {
+        expect(
+            existsSync(exampleMain),
+            'example must be built (npm run build && npm run build:example)',
+        ).toBe(true);
+        crashpad = await startCaptureServer('crashpad');
+        js = await startCaptureServer('js');
+    });
+
+    afterEach(async (context) => {
+        app?.save(context.task.name);
+        await app?.kill();
+        app = null;
+        await crashpad.close();
+        await js.close();
+    });
+
+    const launch = (scenario: string, extra: Partial<LaunchOptions> = {}): RunningApp => {
+        app = launchExample({ scenario, submitUrl: crashpad.url, jsUrl: js.url, ...extra });
+        return app;
+    };
+
+    const expectIdentity = (fields: Record<string, string>, native: boolean): void => {
+        if (native) {
+            expect(fields.product).toBe('bugsplat-electron-example');
+            expect(fields.version).toBe('1.0.0');
+            expect(fields.key).toBe('example-key');
+            expect(fields.email).toBe('fred@bugsplat.com');
+            expect(fields.comments).toBe('BugSplat example app');
+            expect(fields.user).toBe('Fred');
+            expect(fields.channel).toBe('e2e');
+            expect(fields['bugsplat.sdk']).toMatch(/^@bugsplat\/electron\//);
+        } else {
+            expect(fields.appName).toBe('bugsplat-electron-example');
+            expect(fields.appVersion).toBe('1.0.0');
+            expect(fields.appKey).toBe('example-key');
+            expect(fields.email).toBe('fred@bugsplat.com');
+            expect(fields.user).toBe('Fred');
+            expect(fields.description).toBe('BugSplat example app');
+        }
+    };
+
+    it('main-throw: uncaught exception in main is posted, then the app exits', async () => {
+        const running = launch('main-throw');
+        const report = await js.waitFor(isCrash);
+        expectIdentity(report.fields, false);
+        expect(report.fields.callstack).toContain('main-throw');
+        expect(report.fields.callstack).toContain('crasher.js');
+        expect(attrs(report)).toMatchObject({
+            'bugsplat.origin': 'main.uncaughtException',
+            'bugsplat.processType': 'browser',
+            channel: 'e2e',
+        });
+        expect(attrs(report)['bugsplat.sdk']).toMatch(/^@bugsplat\/electron\//);
+        expect(report.files['attachment.txt']?.size).toBeGreaterThan(0);
+        expect(await running.exited).toBe(1);
+        await crashpad.expectNone();
+    });
+
+    it('main-reject: unhandled rejection in main is posted', async () => {
+        const running = launch('main-reject');
+        const report = await js.waitFor(isCrash);
+        expect(report.fields.callstack).toContain('main-reject');
+        expect(attrs(report)['bugsplat.origin']).toBe('main.unhandledRejection');
+        expect(await running.exited).toBe(1);
+    });
+
+    it('main-post: manual post from main carries per-call attributes', async () => {
+        launch('main-post');
+        const report = await js.waitFor(isCrash);
+        expect(report.fields.callstack).toContain('manual post from main');
+        expect(attrs(report)).toMatchObject({ 'bugsplat.origin': 'main.manual', manual: 'true' });
+    });
+
+    it('renderer-throw: uncaught exception in a sandboxed renderer travels over IPC', async () => {
+        launch('renderer-throw');
+        const report = await js.waitFor(isCrash);
+        expectIdentity(report.fields, false);
+        expect(report.fields.callstack).toContain('renderer-throw');
+        expect(report.fields.callstack).toContain('renderer.js');
+        expect(attrs(report)).toMatchObject({
+            'bugsplat.origin': 'renderer.error',
+            'bugsplat.processType': 'renderer',
+            'bugsplat.capture': 'renderer',
+            page: 'index',
+        });
+        expect(attrs(report)['bugsplat.url']).toMatch(/^app:\/\//);
+        await crashpad.expectNone();
+    });
+
+    it('renderer-reject: unhandled rejection in the renderer', async () => {
+        launch('renderer-reject');
+        const report = await js.waitFor(isCrash);
+        expect(report.fields.callstack).toContain('renderer-reject');
+        expect(attrs(report)['bugsplat.origin']).toBe('renderer.unhandledrejection');
+    });
+
+    it('renderer-post + renderer-feedback: manual posts from the page', async () => {
+        launch('renderer-post');
+        const report = await js.waitFor(isCrash);
+        expect(attrs(report)).toMatchObject({
+            'bugsplat.origin': 'renderer.manual',
+            manual: 'true',
+        });
+        await app?.kill();
+
+        launch('renderer-feedback');
+        const feedback = await js.waitFor(isFeedback);
+        expect(feedback.fields.title).toBe('Feedback from the example page');
+        expect(feedback.fields.description).toBe('BugSplat rocks!');
+        expect(feedback.fields.user).toBe('Fred');
+    });
+
+    it('main-crash: native crash in main uploads a minidump with identity crash keys', async () => {
+        launch('main-crash');
+        const crash = await crashpad.waitFor();
+        expect(crash.fields.process_type).toBe('browser');
+        expect(crash.fields.prod).toBe('Electron');
+        expect(crash.fields.ver).toBe(electronVersion);
+        expectIdentity(crash.fields, true);
+        expect(crash.files.upload_file_minidump?.magic).toBe('MDMP');
+        expect(crash.files.upload_file_minidump?.size).toBeGreaterThan(1024);
+        await js.expectNone();
+    });
+
+    it('renderer-crash: renderer minidump carries identity applied through the preload', async () => {
+        launch('renderer-crash');
+        const crash = await crashpad.waitFor();
+        expect(crash.fields.process_type).toBe('renderer');
+        expectIdentity(crash.fields, true);
+        expect(crash.fields.page).toBe('index');
+        expect(crash.files.upload_file_minidump?.magic).toBe('MDMP');
+        // `crashed` already has a minidump: no companion JS report by default.
+        await js.expectNone();
+    });
+
+    it('identity-from-page: identity set in the page reaches both JS and native reports', async () => {
+        launch('identity-from-page');
+        const report = await js.waitFor(isCrash);
+        expect(report.fields.email).toBe('page@bugsplat.com');
+        expect(attrs(report).plan).toBe('pro');
+        const crash = await crashpad.waitFor();
+        expect(crash.fields.process_type).toBe('renderer');
+        expect(crash.fields.email).toBe('page@bugsplat.com');
+        expect(crash.fields.plan).toBe('pro');
+    });
+
+    it('utility-crash: crashes in utility processes are captured natively', async () => {
+        launch('utility-crash');
+        const crash = await crashpad.waitFor();
+        expect(crash.fields.process_type).toBe('utility');
+        expect(crash.fields.product).toBe('bugsplat-electron-example');
+        expect(crash.fields.version).toBe('1.0.0');
+        expect(crash.files.upload_file_minidump?.magic).toBe('MDMP');
+    });
+
+    it.skipIf(!existsSync(exampleAddon))(
+        'addon-crash: native addon crash uploads a minidump',
+        async () => {
+            launch('addon-crash');
+            const crash = await crashpad.waitFor();
+            expect(crash.fields.process_type).toBe('browser');
+            expect(crash.files.upload_file_minidump?.magic).toBe('MDMP');
+        },
+    );
+
+    it.skipIf(electronMajor < 42)(
+        'renderer-oom: OOM minidump carries the electron.v8-oom.* crash keys',
+        async () => {
+            launch('renderer-oom');
+            const crash = await crashpad.waitFor(
+                (request) => request.fields.process_type === 'renderer',
+                90_000,
+            );
+            const keys = Object.keys(crash.fields);
+            expect(keys.some((key) => key.startsWith('electron.v8-oom.stack'))).toBe(true);
+            expect(crash.fields['electron.v8-oom.heap.limit']).toBeDefined();
+            expectIdentity(crash.fields, true);
+        },
+        120_000,
+    );
+
+    it('renderer-hang: unresponsive renderer produces a JS report with the collected call stack', async () => {
+        launch('renderer-hang');
+        const report = await js.waitFor(isCrash, 110_000);
+        expect(attrs(report)).toMatchObject({
+            'bugsplat.origin': 'unresponsive',
+            'bugsplat.reason': 'unresponsive',
+            'bugsplat.stackStatus': 'collected',
+        });
+        expect(report.fields.callstack).toContain('RendererUnresponsive');
+        expect(report.fields.callstack).toContain('renderer.js');
+    }, 120_000);
+
+    it('renderer-hang (file://): pages loaded with loadFile cannot opt in to call stacks', async () => {
+        launch('renderer-hang', { extraArgs: ['--load-file'] });
+        const report = await js.waitFor(isCrash, 110_000);
+        expect(attrs(report)['bugsplat.stackStatus']).toBe('not-opted-in');
+        expect(report.fields.callstack).toContain('at unresponsive.not-opted-in (electron)');
+    }, 120_000);
+
+    it('net transport: main-process reports can be sent through Electron net.fetch', async () => {
+        const running = launch('main-throw', { extraEnv: { BUGSPLAT_E2E_TRANSPORT: 'net' } });
+        const report = await js.waitFor(isCrash);
+        expect(attrs(report)['bugsplat.origin']).toBe('main.uncaughtException');
+        expect(report.files['attachment.txt']?.size).toBeGreaterThan(0);
+        expect(await running.exited).toBe(1);
+    });
+});
