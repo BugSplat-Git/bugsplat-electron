@@ -2,7 +2,6 @@ node_modules/
 dist/
 coverage/
 release/
-build/
 e2e/artifacts/
 example/dist/
 example/build/
