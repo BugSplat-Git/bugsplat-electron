@@ -36,6 +36,18 @@ describe('init', () => {
         expect(getClient()).toBe(client);
     });
 
+    it('re-issues crash keys once the app is ready', async () => {
+        init({ database: 'fred', email: 'fred@bugsplat.com', main: quiet, logger: null });
+        const calls = () =>
+            (crashReporter.addExtraParameter as ReturnType<typeof vi.fn>).mock.calls.filter(
+                (call) => call[0] === 'email',
+            ).length;
+        expect(calls()).toBe(1);
+        await app.whenReady();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(calls()).toBe(2);
+    });
+
     it('defaults application/version from app', () => {
         const client = init({ database: 'fred', main: quiet, logger: null });
         expect(client.application).toBe('FakeApp');

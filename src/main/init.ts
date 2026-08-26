@@ -121,6 +121,11 @@ export function init(options: BugSplatElectronOptions): BugSplatElectron {
             const sync = new NativeExtrasSync(crashReporter, logger);
             sync.apply(store.get());
             store.subscribe((snapshot) => sync.apply(snapshot));
+            // Some Electron builds (observed on 35/Linux) drop crash keys that were set before the
+            // app was ready; re-issuing them once is idempotent everywhere else.
+            void Promise.resolve(safely(() => app.whenReady(), Promise.resolve()))
+                .then(() => sync.reapply(store.get()))
+                .catch(() => undefined);
         }
     });
 

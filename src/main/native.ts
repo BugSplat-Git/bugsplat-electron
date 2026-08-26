@@ -118,6 +118,12 @@ export class NativeExtrasSync {
         private readonly logger: Logger,
     ) {}
 
+    /** Re-issue every crash key (some Electron builds drop keys set before the app is ready). */
+    reapply(snapshot: IdentitySnapshot): void {
+        this.applied = {};
+        this.apply(snapshot);
+    }
+
     apply(snapshot: IdentitySnapshot): void {
         const next = toNativeExtras(snapshot);
         const { set, remove } = diffExtras(this.applied, next);
