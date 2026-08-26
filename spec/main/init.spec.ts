@@ -48,6 +48,40 @@ describe('init', () => {
         expect(calls()).toBe(2);
     });
 
+    it('defers crash keys until ready on Linux builds older than Electron 42', async () => {
+        const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+        Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+        const versions = process.versions as { electron?: string };
+        const previous = versions.electron;
+        versions.electron = '35.7.5';
+        try {
+            const client = init({
+                database: 'fred',
+                email: 'fred@bugsplat.com',
+                main: quiet,
+                logger: null,
+            });
+            client.setUser('Fred');
+            expect(crashReporter.addExtraParameter).not.toHaveBeenCalled();
+            await app.whenReady();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(crashReporter.addExtraParameter).toHaveBeenCalledWith(
+                'email',
+                'fred@bugsplat.com',
+            );
+            expect(crashReporter.addExtraParameter).toHaveBeenCalledWith('user', 'Fred');
+            client.setAppKey('k');
+            expect(crashReporter.addExtraParameter).toHaveBeenCalledWith('key', 'k');
+        } finally {
+            Object.defineProperty(process, 'platform', platform);
+            if (previous === undefined) {
+                delete versions.electron;
+            } else {
+                versions.electron = previous;
+            }
+        }
+    });
+
     it('defaults application/version from app', () => {
         const client = init({ database: 'fred', main: quiet, logger: null });
         expect(client.application).toBe('FakeApp');
