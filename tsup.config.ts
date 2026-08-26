@@ -5,6 +5,8 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
     version: string;
 };
 
+// Note: no per-config `clean` — the four configs build in parallel and a late clean could delete
+// another config's output. `npm run build` removes dist/ once up front instead.
 const define = { __SDK_VERSION__: JSON.stringify(pkg.version) };
 
 export default defineConfig([
@@ -18,7 +20,6 @@ export default defineConfig([
         sourcemap: true,
         splitting: false,
         shims: true,
-        clean: true,
         external: ['electron', 'bugsplat'],
         define,
     },
