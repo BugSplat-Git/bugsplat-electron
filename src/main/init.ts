@@ -119,28 +119,12 @@ export function init(options: BugSplatElectronOptions): BugSplatElectron {
         client.nativeStarted = started;
         if (started) {
             const sync = new NativeExtrasSync(crashReporter, logger);
-            // Electron < 42 on Linux permanently loses crash keys that are created before the app
-            // is ready (updating them later has no effect either), so identity keys are applied
-            // once ready there. Everywhere else they are applied immediately and re-issued at
-            // ready, which is idempotent.
-            const deferUntilReady =
-                process.platform === 'linux' &&
-                capabilities.electronMajor > 0 &&
-                capabilities.electronMajor < 42;
-            let ready = false;
-            if (!deferUntilReady) {
-                sync.apply(store.get());
-            }
-            store.subscribe((snapshot) => {
-                if (ready || !deferUntilReady) {
-                    sync.apply(snapshot);
-                }
-            });
+            sync.apply(store.get());
+            store.subscribe((snapshot) => sync.apply(snapshot));
+            // Re-issue the keys once the app is ready; idempotent, and it covers builds that
+            // initialize their crash key storage late.
             void Promise.resolve(safely(() => app.whenReady(), Promise.resolve()))
-                .then(() => {
-                    ready = true;
-                    sync.reapply(store.get());
-                })
+                .then(() => sync.reapply(store.get()))
                 .catch(() => undefined);
         }
     });

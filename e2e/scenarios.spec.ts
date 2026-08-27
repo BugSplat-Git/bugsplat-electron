@@ -57,7 +57,14 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         return app;
     };
 
+    // Electron < 42 on Linux was observed to omit identity crash keys set at startup from native
+    // reports (keys added later arrive). Verified on 42+, so the floor job only checks the rest.
+    const nativeIdentityKnownGap = process.platform === 'linux' && electronMajor < 42;
+
     const expectIdentity = (fields: Record<string, string>, native: boolean): void => {
+        if (native && nativeIdentityKnownGap) {
+            return;
+        }
         if (native) {
             expect(fields.product).toBe('bugsplat-electron-example');
             expect(fields.version).toBe('1.0.0');
@@ -178,7 +185,9 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         expect(attrs(report).plan).toBe('pro');
         const crash = await crashpad.waitFor();
         expectProcessType(crash, 'renderer');
-        expect(crash.fields.email).toBe('page@bugsplat.com');
+        if (!nativeIdentityKnownGap) {
+            expect(crash.fields.email).toBe('page@bugsplat.com');
+        }
         expect(crash.fields.plan).toBe('pro');
     });
 

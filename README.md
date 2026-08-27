@@ -148,7 +148,7 @@ The renderer client (`init()` / `getClient()` from `@bugsplat/electron/renderer`
 
 Crashpad limits crash key names to 39 bytes and values to 20,320 bytes; longer names are kept for JavaScript reports only and longer values are truncated. Values above ~4 KB may be uploaded in chunks (`key__1`, `key__2`, …). The names `product`, `version`, `key`, `email`, `comments`, `notes`, `user`, `ipAddress` and anything starting with `electron.` or `bugsplat.` are reserved — use the dedicated setters.
 
-On Linux with Electron 35–41, identity crash keys are applied once the app is ready (those builds lose keys created earlier); everywhere else they are applied immediately.
+Known limitation: Electron 35 on Linux was observed to omit identity crash keys set from the main process at startup from its native reports (keys added later, e.g. from a renderer, do arrive). Electron 42 and later is verified on all platforms.
 
 Utility processes forked with `utilityProcess.fork()` receive `native.globalExtra` (which cannot change after startup) but not the mutable identity; call `process.crashReporter.addExtraParameter()` inside the utility process if you need it there.
 
