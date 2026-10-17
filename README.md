@@ -134,6 +134,8 @@ The renderer client (`init()` / `getClient()` from `@bugsplat/electron/renderer`
 | Renderer/child process gone without a minidump (`abnormal-exit`, `launch-failed`, `integrity-failure`) | `app` `render-process-gone` / `child-process-gone`                         | `RenderProcessGone` / `ChildProcessGone` report grouped by reason  |
 | Error in a preload script                                                                              | `webContents` `preload-error`                                              | JavaScript report                                                  |
 
+**Error chains.** A JavaScript error with a `cause` (posted with `post()` or captured in main or a renderer) is sent as a chain: each linked error appears in the BugSplat callstack as a `Caused by:` row with its own stack.
+
 **About mixed-mode stacks.** A native crash report contains native frames from the minidump; JavaScript frames come from the OOM and hang mechanisms above or from JavaScript reports. Electron does not provide a single interleaved native+JavaScript stack, so a crash inside a native addon shows the native stack only. If you need the JS side of a native crash, add context with `setAttribute()` before calling into native code.
 
 `crashed` and `oom` renderer exits already produce a minidump, so they don't create a second JavaScript report by default; `processGone: { renderer: 'all' }` changes that. `killed`, `memory-eviction` and `clean-exit` are never reported unless listed explicitly.

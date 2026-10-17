@@ -6,7 +6,7 @@ import {
     validatePostRequest,
 } from '../../src/main/ipc';
 import { CHANNELS, PROTOCOL_VERSION } from '../../src/shared/protocol';
-import { createTestClient } from '../helpers/client';
+import { createTestClient, postedExceptions } from '../helpers/client';
 
 type Handler = (event: unknown, payload: unknown) => unknown;
 
@@ -90,7 +90,7 @@ describe('installIpc', () => {
         };
         expect(result.error).toBeNull();
         const body = lastBody();
-        expect(String(body.get('callstack'))).toBe('TypeError: bad\n    at x (a.js:1:1)');
+        expect(postedExceptions(body)[0].stack).toBe('TypeError: bad\n    at x (a.js:1:1)');
         expect(JSON.parse(String(body.get('attributes')))).toMatchObject({
             plan: 'pro',
             page: 'home',
@@ -102,6 +102,32 @@ describe('installIpc', () => {
             'bugsplat.webContentsId': '7',
             'bugsplat.pid': '1234',
             'bugsplat.visibilityState': 'visible',
+        });
+    });
+
+    it("posts the renderer error's cause chain", async () => {
+        const { handlers, event, lastBody } = setup();
+        const withCause = {
+            ...validRequest(),
+            error: {
+                name: 'TypeError',
+                message: 'bad',
+                stack: 'TypeError: bad\n    at x (a.js:1:1)',
+                cause: {
+                    name: 'SyntaxError',
+                    message: 'bad json',
+                    stack: 'SyntaxError: bad json\n    at parse (a.js:2:2)',
+                },
+            },
+        };
+        await handlers.get(CHANNELS.post)!(event(), withCause);
+        const [root, linked] = postedExceptions(lastBody());
+        expect(root.stack).toBe('TypeError: bad\n    at x (a.js:1:1)');
+        expect(linked).toMatchObject({
+            parentId: 0,
+            source: 'cause',
+            type: 'SyntaxError',
+            stack: 'SyntaxError: bad json\n    at parse (a.js:2:2)',
         });
     });
 

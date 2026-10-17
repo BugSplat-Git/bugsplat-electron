@@ -50,3 +50,19 @@ export function createTestClient(
     const lastUrl = (): string => String((fetchSpy.mock.calls.at(-1) as unknown[])[0]);
     return { client, store, fetchSpy, logger, warnings, lastBody, lastUrl, options };
 }
+
+/** One entry of the `exceptions` chain `bugsplat` posts: the error itself first, linked errors after. */
+export interface PostedException {
+    id: number;
+    parentId: number | null;
+    source: string | null;
+    type: string;
+    message: string;
+    stack?: string;
+    properties: Record<string, unknown>;
+}
+
+export function postedExceptions(body: FormData): PostedException[] {
+    return (JSON.parse(String(body.get('exceptions'))) as { exceptions: PostedException[] })
+        .exceptions;
+}

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { installProcessErrorHandlers } from '../../src/main/signals/process-errors';
-import { createTestClient } from '../helpers/client';
+import { createTestClient, postedExceptions } from '../helpers/client';
 
 const options = (overrides = {}) => ({
     captureUncaughtExceptions: true,
@@ -43,7 +43,7 @@ describe('installProcessErrorHandlers', () => {
         const { proc, lastBody } = setup();
         proc.emit('unhandledRejection', 'just a string');
         await flush();
-        expect(String(lastBody().get('callstack'))).toContain('Error: just a string');
+        expect(postedExceptions(lastBody())[0].stack).toContain('Error: just a string');
         expect(JSON.parse(String(lastBody().get('attributes')))['bugsplat.origin']).toBe(
             'main.unhandledRejection',
         );

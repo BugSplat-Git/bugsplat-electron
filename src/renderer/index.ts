@@ -15,7 +15,7 @@ import type {
     SerializedError,
     SerializedPostOptions,
 } from '../shared/protocol';
-import { serializeError, toError } from '../shared/serialize-error';
+import { deserializeError, serializeError, toError } from '../shared/serialize-error';
 import { installCapture } from './capture';
 import { locateBridge } from './bridge-locator';
 
@@ -196,7 +196,7 @@ export class BugSplatRenderer extends BugSplat {
         return this.send(
             { kind: 'crash', origin, error, context: this.context() },
             error.message,
-            () => super.post(toError(error.message, this.href())),
+            () => super.post(deserializeError(error)),
         );
     }
 

@@ -23,6 +23,15 @@ function rendererFrame2(message: string): never {
     throw new Error(`BugSplat: ${message}`);
 }
 
+// A wrapped failure: the SyntaxError from the bad JSON travels on `cause`.
+function loadUserSettings(): void {
+    try {
+        JSON.parse('{ not valid json');
+    } catch (error) {
+        throw new Error('Failed to load user settings', { cause: error });
+    }
+}
+
 function hangFrame0(): void {
     hangFrame1();
 }
@@ -51,6 +60,23 @@ async function runRendererScenario(name: string): Promise<void> {
             });
             log(result.error ? `post failed: ${result.error.message}` : 'posted from renderer');
             return;
+        }
+        case 'renderer-post-cause': {
+            try {
+                loadUserSettings();
+                log('loadUserSettings did not throw');
+                return;
+            } catch (error) {
+                const result = await client.post(error as Error, {
+                    attributes: { manual: 'true' },
+                });
+                log(
+                    result.error
+                        ? `post failed: ${result.error.message}`
+                        : 'posted from renderer with cause',
+                );
+                return;
+            }
         }
         case 'renderer-feedback': {
             const result = await client.postFeedback('Feedback from the example page', {

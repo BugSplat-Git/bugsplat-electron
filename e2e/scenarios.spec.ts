@@ -15,6 +15,22 @@ const attrs = (request: CapturedRequest): Record<string, string> =>
     JSON.parse(request.fields.attributes ?? '{}') as Record<string, string>;
 const isFeedback = (request: CapturedRequest): boolean => 'title' in request.fields;
 const isCrash = (request: CapturedRequest): boolean => !isFeedback(request);
+/** One entry of the `exceptions` chain: the posted error first, each linked error after it. */
+interface PostedException {
+    parentId: number | null;
+    source: string | null;
+    type: string;
+    message: string;
+    stack?: string;
+}
+const exceptions = (request: CapturedRequest): PostedException[] =>
+    (
+        JSON.parse(request.fields.exceptions ?? '{"exceptions":[]}') as {
+            exceptions: PostedException[];
+        }
+    ).exceptions;
+/** The posted error's own stack. */
+const callstack = (request: CapturedRequest): string => exceptions(request)[0]?.stack ?? '';
 /** Crashpad names the process type `process_type` on recent Electron and `ptype` on older Linux builds. */
 const processType = (request: CapturedRequest): string | undefined =>
     request.fields.process_type ?? request.fields.ptype;
@@ -88,8 +104,8 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         const running = launch('main-throw');
         const report = await js.waitFor(isCrash);
         expectIdentity(report.fields, false);
-        expect(report.fields.callstack).toContain('main-throw');
-        expect(report.fields.callstack).toContain('crasher.js');
+        expect(callstack(report)).toContain('main-throw');
+        expect(callstack(report)).toContain('crasher.js');
         expect(attrs(report)).toMatchObject({
             'bugsplat.origin': 'main.uncaughtException',
             'bugsplat.processType': 'browser',
@@ -104,7 +120,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
     it('main-reject: unhandled rejection in main is posted', async () => {
         const running = launch('main-reject');
         const report = await js.waitFor(isCrash);
-        expect(report.fields.callstack).toContain('main-reject');
+        expect(callstack(report)).toContain('main-reject');
         expect(attrs(report)['bugsplat.origin']).toBe('main.unhandledRejection');
         expect(await running.exited).toBe(1);
     });
@@ -112,16 +128,27 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
     it('main-post: manual post from main carries per-call attributes', async () => {
         launch('main-post');
         const report = await js.waitFor(isCrash);
-        expect(report.fields.callstack).toContain('manual post from main');
+        expect(callstack(report)).toContain('manual post from main');
         expect(attrs(report)).toMatchObject({ 'bugsplat.origin': 'main.manual', manual: 'true' });
+    });
+
+    it('main-post-cause: a post with Error.cause carries the chain', async () => {
+        launch('main-post-cause');
+        const report = await js.waitFor(isCrash);
+        expect(callstack(report)).toContain('loadUserSettings');
+        expect(attrs(report)).toMatchObject({ 'bugsplat.origin': 'main.manual', manual: 'true' });
+        const [root, linked] = exceptions(report);
+        expect(root.message).toBe('Failed to load user settings');
+        expect(linked).toMatchObject({ parentId: 0, source: 'cause', type: 'SyntaxError' });
+        expect(linked.stack).toContain('loadUserSettings');
     });
 
     it('renderer-throw: uncaught exception in a sandboxed renderer travels over IPC', async () => {
         launch('renderer-throw');
         const report = await js.waitFor(isCrash);
         expectIdentity(report.fields, false);
-        expect(report.fields.callstack).toContain('renderer-throw');
-        expect(report.fields.callstack).toContain('renderer.js');
+        expect(callstack(report)).toContain('renderer-throw');
+        expect(callstack(report)).toContain('renderer.js');
         expect(attrs(report)).toMatchObject({
             'bugsplat.origin': 'renderer.error',
             'bugsplat.processType': 'renderer',
@@ -135,17 +162,30 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
     it('renderer-reject: unhandled rejection in the renderer', async () => {
         launch('renderer-reject');
         const report = await js.waitFor(isCrash);
-        expect(report.fields.callstack).toContain('renderer-reject');
+        expect(callstack(report)).toContain('renderer-reject');
         expect(attrs(report)['bugsplat.origin']).toBe('renderer.unhandledrejection');
     });
 
-    it('renderer-post + renderer-feedback: manual posts from the page', async () => {
+    it('renderer-post + renderer-post-cause + renderer-feedback: manual posts from the page', async () => {
         launch('renderer-post');
         const report = await js.waitFor(isCrash);
         expect(attrs(report)).toMatchObject({
             'bugsplat.origin': 'renderer.manual',
             manual: 'true',
         });
+        await app?.kill();
+
+        launch('renderer-post-cause');
+        const chained = await js.waitFor(isCrash);
+        expect(attrs(chained)).toMatchObject({
+            'bugsplat.origin': 'renderer.manual',
+            manual: 'true',
+        });
+        const [root, linked] = exceptions(chained);
+        expect(root.message).toBe('Failed to load user settings');
+        expect(callstack(chained)).toContain('renderer.js');
+        expect(linked).toMatchObject({ parentId: 0, source: 'cause', type: 'SyntaxError' });
+        expect(linked.stack).toContain('loadUserSettings');
         await app?.kill();
 
         launch('renderer-feedback');
@@ -234,15 +274,15 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
             'bugsplat.reason': 'unresponsive',
             'bugsplat.stackStatus': 'collected',
         });
-        expect(report.fields.callstack).toContain('RendererUnresponsive');
-        expect(report.fields.callstack).toContain('renderer.js');
+        expect(callstack(report)).toContain('RendererUnresponsive');
+        expect(callstack(report)).toContain('renderer.js');
     }, 120_000);
 
     it('renderer-hang (file://): pages loaded with loadFile cannot opt in to call stacks', async () => {
         launch('renderer-hang', { extraArgs: ['--load-file'] });
         const report = await js.waitFor(isCrash, 110_000);
         expect(attrs(report)['bugsplat.stackStatus']).toBe('not-opted-in');
-        expect(report.fields.callstack).toContain('at unresponsive.not-opted-in (electron)');
+        expect(callstack(report)).toContain('at unresponsive.not-opted-in (electron)');
     }, 120_000);
 
     it('net transport: main-process reports can be sent through Electron net.fetch', async () => {
