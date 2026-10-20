@@ -17,7 +17,11 @@ export function createFetch(transport: TransportOption): FetchLike {
     }
     return (input, init) => {
         if (app.isReady() && typeof net?.fetch === 'function') {
-            return net.fetch(input as string, init as Parameters<typeof net.fetch>[1]);
+            const request = input instanceof URL ? input.href : input;
+            return net.fetch(
+                request as Parameters<typeof net.fetch>[0],
+                init as Parameters<typeof net.fetch>[1],
+            );
         }
         return nodeFetch(input, init);
     };

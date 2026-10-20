@@ -52,8 +52,12 @@ export function createBridge(deps: BridgeDeps): BugSplatBridge {
     let applied: Record<string, string> = {};
     const listeners = new Set<(snapshot: IdentitySnapshot) => void>();
 
+    const isSnapshot = (
+        snapshot: IdentitySnapshot | null | undefined,
+    ): snapshot is IdentitySnapshot => !!snapshot && typeof snapshot.seq === 'number';
+
     const applyIdentity = (snapshot: IdentitySnapshot | null | undefined): void => {
-        if (!snapshot || typeof snapshot.seq !== 'number' || snapshot.seq <= lastSeq) {
+        if (!isSnapshot(snapshot) || snapshot.seq <= lastSeq) {
             return;
         }
         lastSeq = snapshot.seq;
@@ -89,7 +93,7 @@ export function createBridge(deps: BridgeDeps): BugSplatBridge {
     try {
         deps.ipcRenderer.on(CHANNELS.identity, (_event, message) => {
             const snapshot = (message as IdentityMessage | undefined)?.identity;
-            if (snapshot) {
+            if (isSnapshot(snapshot)) {
                 mode = 'main';
             }
             applyIdentity(snapshot);

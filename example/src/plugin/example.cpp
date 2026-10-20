@@ -17,6 +17,7 @@ Napi::Number example::addWrapped(const Napi::CallbackInfo &info)
     if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber())
     {
         Napi::TypeError::New(env, "arg1::Number, arg2::Number expected").ThrowAsJavaScriptException();
+        return Napi::Number();
     }
     // Convert javascripts datatype to c++
     Napi::Number first = info[0].As<Napi::Number>();
@@ -33,3 +34,12 @@ Napi::Object example::Init(Napi::Env env, Napi::Object exports)
     exports.Set("add", Napi::Function::New(env, example::addWrapped));
     return exports;
 }
+
+// Register the module at global scope: NODE_API_MODULE pastes the init function's name
+// into the symbol it defines, so it needs an unqualified name.
+static Napi::Object InitAll(Napi::Env env, Napi::Object exports)
+{
+    return example::Init(env, exports);
+}
+
+NODE_API_MODULE(addon, InitAll)

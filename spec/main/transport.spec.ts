@@ -28,6 +28,18 @@ describe('createFetch', () => {
         vi.unstubAllGlobals();
     });
 
+    it('forwards a Request to net.fetch and turns a URL into its href', async () => {
+        (app.isReady as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        const netFetch = net.fetch as ReturnType<typeof vi.fn>;
+        netFetch.mockResolvedValue(new Response('net'));
+        const fetchImpl = createFetch('net');
+        const request = new Request('https://x/post', { method: 'POST' });
+        await fetchImpl(request);
+        expect(netFetch).toHaveBeenLastCalledWith(request, undefined);
+        await fetchImpl(new URL('https://x/url'));
+        expect(netFetch).toHaveBeenLastCalledWith('https://x/url', undefined);
+    });
+
     it('passes custom fetch through and injects into bugsplat', () => {
         const custom = vi.fn();
         expect(createFetch(custom as unknown as typeof fetch)).toBe(custom);

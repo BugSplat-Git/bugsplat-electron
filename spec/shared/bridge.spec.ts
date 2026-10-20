@@ -79,6 +79,15 @@ describe('createBridge', () => {
         expect(bridge.getMode()).toBe('main');
     });
 
+    it('stays in no-main mode for a malformed identity broadcast', () => {
+        const { ipc, emit } = fakeIpc(null);
+        const bridge = createBridge({ ...deps(), ipcRenderer: ipc, crashReporter: null });
+        emit(CHANNELS.identity, { identity: { ...emptyIdentity(), seq: undefined } });
+        emit(CHANNELS.identity, { identity: { email: 'no-seq@x.y' } });
+        expect(bridge.getMode()).toBe('no-main');
+        expect(bridge.getIdentity()).toBeNull();
+    });
+
     it('survives a throwing hello', () => {
         const { ipc } = fakeIpc(null);
         ipc.sendSync.mockImplementation(() => {
