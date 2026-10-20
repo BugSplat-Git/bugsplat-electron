@@ -50,7 +50,10 @@ jobs:
 
             - name: Semantic Release
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # The org ruleset only lets pull requests change main, and semantic-release
+                  # pushes its release commit and tag directly. RELEASE_TOKEN is an admin's
+                  # fine-grained PAT (admins can bypass the ruleset).
+                  GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
                   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
                   # setup-node's registry-url writes an .npmrc that authenticates with
                   # NODE_AUTH_TOKEN; without it semantic-release uses setup-node's placeholder.
