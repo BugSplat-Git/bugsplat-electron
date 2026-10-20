@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+release/
+e2e/artifacts/
+example/dist/
+example/build/
+*.tsbuildinfo
+.eslintcache
+.DS_Store
+.env

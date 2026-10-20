@@ -1,0 +1,9 @@
+dist/
+coverage/
+node_modules/
+release/
+example/dist/
+example/build/
+e2e/artifacts/
+package-lock.json
+CHANGELOG.md

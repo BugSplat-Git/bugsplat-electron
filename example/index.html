@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <!-- No connect-src is needed: renderer reports travel to the main process over IPC. -->
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'" />
+        <title>BugSplat Electron Example</title>
+        <link rel="stylesheet" href="./assets/css/demo.css" />
+    </head>
+    <body>
+        <header>
+            <img src="./assets/img/bugsplat-logo.png" alt="BugSplat" class="logo" />
+            <div>
+                <h1>@bugsplat/electron example</h1>
+                <p id="status">initializing…</p>
+            </div>
+        </header>
+
+        <main>
+            <section>
+                <h2>JavaScript errors</h2>
+                <div class="buttons">
+                    <button data-scenario="main-throw">Uncaught exception (main)</button>
+                    <button data-scenario="main-reject">Unhandled rejection (main)</button>
+                    <button data-scenario="main-post">Manual post (main)</button>
+                    <button data-scenario="main-post-cause">Post with cause (main)</button>
+                    <button data-scenario="renderer-throw">Uncaught exception (renderer)</button>
+                    <button data-scenario="renderer-reject">Unhandled rejection (renderer)</button>
+                    <button data-scenario="renderer-post">Manual post (renderer)</button>
+                    <button data-scenario="renderer-post-cause">Post with cause (renderer)</button>
+                    <button data-scenario="renderer-feedback">Feedback (renderer)</button>
+                </div>
+            </section>
+
+            <section>
+                <h2>Native crashes (Crashpad minidumps)</h2>
+                <div class="buttons">
+                    <button data-scenario="main-crash">process.crash() (main)</button>
+                    <button data-scenario="renderer-crash">process.crash() (renderer)</button>
+                    <button data-scenario="utility-crash">Crash a utility process</button>
+                    <button data-scenario="addon-crash">Crash inside a native addon</button>
+                    <button data-scenario="renderer-oom">Renderer out of memory</button>
+                </div>
+            </section>
+
+            <section>
+                <h2>Hangs and identity</h2>
+                <div class="buttons">
+                    <button data-scenario="renderer-hang">
+                        Hang the renderer (~30s to detect)
+                    </button>
+                    <button data-scenario="identity-from-page">
+                        Set identity from page, post, then crash
+                    </button>
+                </div>
+                <form id="identity" class="identity">
+                    <input name="user" placeholder="user" />
+                    <input name="email" placeholder="email" />
+                    <input name="appKey" placeholder="app key" />
+                    <button type="submit">Update identity</button>
+                </form>
+            </section>
+
+            <section>
+                <h2>Log</h2>
+                <div id="log" class="log"></div>
+            </section>
+        </main>
+
+        <script src="./vendor/renderer.global.js"></script>
+        <script src="./renderer.js"></script>
+    </body>
+</html>

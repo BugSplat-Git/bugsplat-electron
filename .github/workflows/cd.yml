@@ -1,0 +1,55 @@
+name: CD
+
+on:
+    push:
+        branches: [main, beta]
+
+permissions:
+    contents: write
+    issues: write
+    pull-requests: write
+    id-token: write
+
+concurrency:
+    group: release-${{ github.ref }}
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Use Node.js 24
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: npm
+                  registry-url: https://registry.npmjs.org
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Lint, test, build
+              run: |
+                  npm run lint
+                  npm run typecheck
+                  npm test
+                  npm run build
+                  npm run check:exports
+                  npm run test:dist
+
+            - name: Linux display and sandbox setup
+              run: bash .github/scripts/linux-electron-setup.sh
+
+            - name: E2E
+              run: xvfb-run -a --server-args="-screen 0 1280x1024x24" npm run e2e
+
+            - name: Semantic Release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+              run: npx semantic-release

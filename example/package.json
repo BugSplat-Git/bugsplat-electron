@@ -1,0 +1,24 @@
+{
+    "name": "bugsplat-electron-example",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Example Electron app integrated with @bugsplat/electron (migrated from my-electron-crasher)",
+    "database": "fred",
+    "main": "dist/main.js",
+    "scripts": {
+        "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && node scripts/copy-assets.mjs",
+        "build:addon": "cmake-js compile && copyfiles --flat build/Release/addon.node dist",
+        "start": "npm run build && electron .",
+        "upload-symbols": "npx --yes @bugsplat/symbol-upload -i \"$SYMBOL_UPLOAD_CLIENT_ID\" -s \"$SYMBOL_UPLOAD_CLIENT_SECRET\" -d ./dist -f \"**/*.js.map\"",
+        "upload-addon-symbols": "npx --yes @bugsplat/symbol-upload -i \"$SYMBOL_UPLOAD_CLIENT_ID\" -s \"$SYMBOL_UPLOAD_CLIENT_SECRET\" -d ./dist -f \"**/*.node\" -m"
+    },
+    "dependencies": {
+        "@bugsplat/electron": "file:..",
+        "node-addon-api": "^8.9.2"
+    },
+    "devDependencies": {
+        "cmake-js": "^8.0.0",
+        "copyfiles": "^2.4.1",
+        "typescript": "^5.9.3"
+    }
+}
