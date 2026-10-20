@@ -16,6 +16,7 @@ class FakeSession extends EventEmitter {
     });
     getPreloadScripts = vi.fn(() => this.preloadScripts);
     webRequest = { onHeadersReceived: vi.fn() };
+    fetch = vi.fn();
 }
 
 export const app = Object.assign(new EventEmitter(), {

@@ -175,8 +175,13 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         });
         await app?.kill();
 
+        // The server keeps every request, and waitFor matches ones that already arrived, so
+        // only accept a report posted after the first launch.
+        const postedBefore = js.requests.length;
         launch('renderer-post-cause');
-        const chained = await js.waitFor(isCrash);
+        const chained = await js.waitFor(
+            (request) => isCrash(request) && js.requests.indexOf(request) >= postedBefore,
+        );
         expect(attrs(chained)).toMatchObject({
             'bugsplat.origin': 'renderer.manual',
             manual: 'true',
