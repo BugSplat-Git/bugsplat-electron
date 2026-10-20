@@ -1,6 +1,6 @@
 {
     "name": "@bugsplat/electron",
-    "version": "0.0.0-development",
+    "version": "1.0.0",
     "description": "BugSplat crash and error reporting for Electron: native crashes, JavaScript errors, hangs and OOMs from one init()",
     "license": "MIT",
     "author": "BugSplat <support@bugsplat.com> (https://bugsplat.com)",
