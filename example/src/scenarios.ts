@@ -6,12 +6,13 @@ import { app, utilityProcess, type BrowserWindow } from 'electron';
 import { existsSync } from 'node:fs';
 import * as path from 'node:path';
 import type { BugSplatElectron } from '@bugsplat/electron';
-import { uncaughtException, unhandledRejection } from './crasher';
+import { loadUserSettings, uncaughtException, unhandledRejection } from './crasher';
 
 export const MAIN_SCENARIOS = [
     'main-throw',
     'main-reject',
     'main-post',
+    'main-post-cause',
     'main-crash',
     'utility-crash',
     'addon-crash',
@@ -21,6 +22,7 @@ export const RENDERER_SCENARIOS = [
     'renderer-throw',
     'renderer-reject',
     'renderer-post',
+    'renderer-post-cause',
     'renderer-feedback',
     'renderer-crash',
     'renderer-hang',
@@ -59,6 +61,19 @@ export async function runScenario(name: ScenarioName, ctx: ScenarioContext): Pro
                 attributes: { manual: 'true' },
             });
             return result.error ? `post failed: ${result.error.message}` : 'posted from main';
+        }
+        case 'main-post-cause': {
+            try {
+                loadUserSettings();
+                return 'loadUserSettings did not throw';
+            } catch (error) {
+                const result = await ctx.bugsplat.post(error as Error, {
+                    attributes: { manual: 'true' },
+                });
+                return result.error
+                    ? `post failed: ${result.error.message}`
+                    : 'posted from main with cause';
+            }
         }
         case 'main-crash':
             setTimeout(() => process.crash(), 10);

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { createTestClient, okResponse } from '../helpers/client';
+import { createTestClient, okResponse, postedExceptions } from '../helpers/client';
 
 describe('BugSplatElectron', () => {
     it('posts with merged identity, notes and context attributes', async () => {
@@ -25,7 +25,7 @@ describe('BugSplatElectron', () => {
         expect(body.get('user')).toBe('Fred');
         expect(body.get('email')).toBe('fred@bugsplat.com');
         expect(body.get('description')).toBe('desc');
-        expect(String(body.get('callstack'))).toContain('Error: boom');
+        expect(postedExceptions(body)[0].stack).toContain('Error: boom');
         expect(JSON.parse(String(body.get('attributes')))).toEqual({
             plan: 'pro',
             notes: 'some notes',
@@ -41,7 +41,26 @@ describe('BugSplatElectron', () => {
         await client.post('text error', { email: 'override@x.y' });
         expect(lastBody().get('email')).toBe('override@x.y');
         expect(lastBody().get('user')).toBe('u');
-        expect(String(lastBody().get('callstack'))).toContain('Error: text error');
+        expect(postedExceptions(lastBody())[0].stack).toContain('Error: text error');
+    });
+
+    it('posts the Error.cause chain', async () => {
+        const { client, lastBody } = createTestClient();
+        const cause = new SyntaxError('Unexpected token');
+        await client.post(new Error('Failed to load user settings', { cause }));
+        const [root, linked] = postedExceptions(lastBody());
+        expect(root).toMatchObject({
+            id: 0,
+            parentId: null,
+            message: 'Failed to load user settings',
+        });
+        expect(linked).toMatchObject({
+            parentId: 0,
+            source: 'cause',
+            type: 'SyntaxError',
+            message: 'Unexpected token',
+        });
+        expect(linked.stack).toContain('SyntaxError: Unexpected token');
     });
 
     it('routes setters through the identity store', () => {
