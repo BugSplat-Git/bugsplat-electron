@@ -51,7 +51,8 @@ const { database, name, version } = require('./package.json');
 
 const bugsplat = init({ database, application: name, version });
 
-bugsplat.setUser('fred@bedrock.com');
+bugsplat.setUser('Fred');
+bugsplat.setEmail('fred@bedrock.com');
 bugsplat.setAttribute('plan', 'pro');
 ```
 
@@ -130,7 +131,7 @@ The renderer client (`init()` / `getClient()` from `@bugsplat/electron/renderer`
 | JS error in main                                                                                       | `process.on('uncaughtException' / 'unhandledRejection')`                   | JavaScript report with the JS call stack                           |
 | JS error in a renderer                                                                                 | `window` `error` / `unhandledrejection` → preload bridge → IPC → main      | JavaScript report with the renderer call stack, URL and title      |
 | Renderer hang                                                                                          | `webContents` `unresponsive` + `WebFrameMain.collectJavaScriptCallStack()` | `RendererUnresponsive` report grouped by the hung JS frame         |
-| Renderer out of memory                                                                                 | Electron ≥ 42 writes `electron.v8-oom.*` crash keys                        | Minidump with `electron.v8-oom.stack`, heap statistics, location   |
+| Renderer out of memory                                                                                 | Electron ≥ 42.10.1 writes `electron.v8-oom.*` crash keys                   | Minidump with `electron.v8-oom.stack`, heap statistics, location   |
 | Renderer/child process gone without a minidump (`abnormal-exit`, `launch-failed`, `integrity-failure`) | `app` `render-process-gone` / `child-process-gone`                         | `RenderProcessGone` / `ChildProcessGone` report grouped by reason  |
 | Error in a preload script                                                                              | `webContents` `preload-error`                                              | JavaScript report                                                  |
 

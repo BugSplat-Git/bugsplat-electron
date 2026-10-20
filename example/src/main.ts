@@ -70,8 +70,11 @@ function serveApp(): void {
         if (pathname === '/' || pathname === '') {
             pathname = '/index.html';
         }
-        const filePath = path.normalize(path.join(__dirname, pathname));
-        if (!filePath.startsWith(__dirname)) {
+        // Resolve inside __dirname and reject anything that climbs out of it. A string prefix
+        // check would also accept a sibling such as `${__dirname}-other`.
+        const filePath = path.resolve(__dirname, `.${pathname}`);
+        const relative = path.relative(__dirname, filePath);
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
             return new Response('Forbidden', { status: 403 });
         }
         const response = await net.fetch(pathToFileURL(filePath).toString());
