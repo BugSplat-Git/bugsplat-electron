@@ -85,6 +85,13 @@ describe('preload', () => {
         expect(ipcRenderer.invoke).not.toHaveBeenCalled();
     });
 
+    it("exposes setDebugIds, which forwards a page's debug IDs to the main process", async () => {
+        await loadPreload();
+        const debugIds = { 'app://./index.js': '9f2c1a7e-3b4d-4c5e-8f60-112233445566' };
+        exposedBridge().setDebugIds?.(debugIds);
+        expect(ipcRenderer.send).toHaveBeenCalledWith(CHANNELS.debugIds, debugIds);
+    });
+
     it('does not install fallback capture when main disables it', async () => {
         (ipcRenderer.sendSync as ReturnType<typeof vi.fn>).mockReturnValue(helloResponse(false));
         await loadPreload();

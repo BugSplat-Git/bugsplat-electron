@@ -1,12 +1,21 @@
-import { describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
     installIpc,
     trustTopLevelFrames,
     validateIdentityPatch,
     validatePostRequest,
 } from '../../src/main/ipc';
-import { CHANNELS, PROTOCOL_VERSION } from '../../src/shared/protocol';
+import { CHANNELS, LIMITS, PROTOCOL_VERSION } from '../../src/shared/protocol';
 import { createTestClient, postedExceptions } from '../helpers/client';
+import {
+    clearDebugIds,
+    ID_A,
+    ID_B,
+    ID_C,
+    postedDebugMeta,
+    registerDebugId,
+} from '../helpers/debug-ids';
 
 type Handler = (event: unknown, payload: unknown) => unknown;
 
@@ -25,20 +34,21 @@ function setup(options = {}) {
         ipcMain: ipcMain as never,
         getAllWebContents: () => contents as never,
     });
-    const sender = {
+    const sender = Object.assign(new EventEmitter(), {
         id: 7,
         getURL: () => 'app://index.html',
         getTitle: () => 'Title',
         getType: () => 'window',
         getOSProcessId: () => 1234,
-    };
+        isDestroyed: () => false,
+    });
     const event = (overrides = {}) => ({
         sender,
         senderFrame: { parent: null },
         returnValue: undefined as unknown,
         ...overrides,
     });
-    return { ...test, handlers, listeners, contents, dispose, event, ipcMain };
+    return { ...test, handlers, listeners, contents, dispose, event, ipcMain, sender };
 }
 
 const validRequest = () => ({
@@ -52,6 +62,25 @@ const validRequest = () => ({
         isTopLevel: true,
         capture: 'renderer',
     },
+});
+
+const INDEX = 'app://./assets/index-BX3k.js';
+const VENDOR = 'app://./assets/vendor-41fe.js';
+
+/** A report whose stacks name `INDEX` (the error) and `VENDOR` (its cause). */
+const bundledRequest = (debugIds?: unknown) => ({
+    ...validRequest(),
+    error: {
+        name: 'Error',
+        message: 'outer',
+        stack: `Error: outer\n    at render (${INDEX}:1:2345)`,
+        cause: {
+            name: 'TypeError',
+            message: 'inner',
+            stack: `TypeError: inner\n    at ${VENDOR}:9:1`,
+        },
+    },
+    debugIds,
 });
 
 describe('installIpc', () => {
@@ -131,6 +160,127 @@ describe('installIpc', () => {
         });
     });
 
+    it("adds the renderer's debug IDs to the report as debugMeta", async () => {
+        const { handlers, event, lastBody } = setup();
+        const result = (await handlers.get(CHANNELS.post)!(
+            event(),
+            bundledRequest({ [INDEX]: ID_A, [VENDOR]: ID_B }),
+        )) as { error: string | null };
+        expect(result.error).toBeNull();
+        expect(postedDebugMeta(lastBody())).toEqual([
+            { file: INDEX, debugId: ID_A },
+            { file: VENDOR, debugId: ID_B },
+        ]);
+    });
+
+    it('posts no debugMeta for a renderer that sends no debug IDs', async () => {
+        const { handlers, event, lastBody } = setup();
+        await handlers.get(CHANNELS.post)!(event(), bundledRequest());
+        expect(Object.keys(JSON.parse(String(lastBody().get('exceptions'))))).toEqual([
+            'exceptions',
+        ]);
+    });
+
+    it('posts the report and the valid debug IDs when some entries are invalid', async () => {
+        const { handlers, event, lastBody } = setup();
+        const hostile = JSON.parse(
+            `{"__proto__":{"polluted":true},"${INDEX}":"abc","${VENDOR}":"${ID_B}","n":1}`,
+        ) as unknown;
+        const result = (await handlers.get(CHANNELS.post)!(event(), bundledRequest(hostile))) as {
+            error: string | null;
+        };
+        expect(result.error).toBeNull();
+        expect(postedDebugMeta(lastBody())).toEqual([{ file: VENDOR, debugId: ID_B }]);
+        expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+
+        for (const notAnObject of ['abc', 7, [[INDEX, ID_A]], null]) {
+            expect(
+                (
+                    (await handlers.get(CHANNELS.post)!(event(), bundledRequest(notAnObject))) as {
+                        error: string | null;
+                    }
+                ).error,
+            ).toBeNull();
+            expect(postedDebugMeta(lastBody())).toBeUndefined();
+        }
+    });
+
+    describe('with debug IDs registered in the main process', () => {
+        afterEach(clearDebugIds);
+
+        it("keeps the main process's ID for a file a renderer also names", async () => {
+            const MAIN = '/app/dist/main.js';
+            registerDebugId(MAIN, ID_A);
+            const { handlers, event, lastBody } = setup();
+            const request = bundledRequest({ [MAIN]: ID_C, [INDEX]: ID_B });
+            request.error.stack += `\n    at handle (${MAIN}:3:4)`;
+            await handlers.get(CHANNELS.post)!(event(), request);
+            expect(postedDebugMeta(lastBody())).toEqual([
+                { file: INDEX, debugId: ID_B },
+                { file: MAIN, debugId: ID_A },
+            ]);
+        });
+    });
+
+    it('keeps the debug IDs each page registers until its webContents is destroyed', () => {
+        const { listeners, event, client, sender } = setup();
+        const register = listeners.get(CHANNELS.debugIds)!;
+        expect(client.rendererDebugIds.get(sender as never)).toBeUndefined();
+
+        register(event(), { [INDEX]: ID_A, 'bad.js': 'abc' });
+        expect(client.rendererDebugIds.get(sender as never)).toEqual({ [INDEX]: ID_A });
+
+        register(event(), { [INDEX]: ID_A, [VENDOR]: ID_B });
+        expect(client.rendererDebugIds.get(sender as never)).toEqual({
+            [INDEX]: ID_A,
+            [VENDOR]: ID_B,
+        });
+
+        register(event({ senderFrame: { parent: {} } }), { 'frame.js': ID_C });
+        expect(client.rendererDebugIds.get(sender as never)).toEqual({
+            [INDEX]: ID_A,
+            [VENDOR]: ID_B,
+        });
+
+        register(event(), 'not an object');
+        expect(client.rendererDebugIds.get(sender as never)).toEqual({});
+
+        register(event(), { [INDEX]: ID_A });
+        sender.emit('destroyed');
+        expect(client.rendererDebugIds.get(sender as never)).toBeUndefined();
+    });
+
+    it('caps the debug IDs a page registers and ignores senders its trust policy rejects', () => {
+        const { listeners, event, client, sender, logger } = setup({ trustSender: () => false });
+        listeners.get(CHANNELS.debugIds)!(event(), { [INDEX]: ID_A });
+        expect(client.rendererDebugIds.get(sender as never)).toBeUndefined();
+
+        const trusted = setup();
+        const many: Record<string, string> = {};
+        for (let i = 0; i < LIMITS.debugIdsPerPage + 50; i++) {
+            many[`app://./assets/chunk-${i}.js`] = ID_A;
+        }
+        trusted.listeners.get(CHANNELS.debugIds)!(trusted.event(), many);
+        expect(
+            Object.keys(trusted.client.rendererDebugIds.get(trusted.sender as never) ?? {}),
+        ).toHaveLength(LIMITS.debugIdsPerPage);
+
+        // Hang stacks come from the main frame: a subframe must not replace its debug IDs,
+        // even when the app's trust policy lets subframes post.
+        const permissive = setup({ trustSender: () => true });
+        const register = permissive.listeners.get(CHANNELS.debugIds)!;
+        register(permissive.event(), { [INDEX]: ID_A });
+        register(permissive.event({ senderFrame: { parent: {} } }), { 'frame.js': ID_C });
+        expect(permissive.client.rendererDebugIds.get(permissive.sender as never)).toEqual({
+            [INDEX]: ID_A,
+        });
+
+        // A sender that cannot be tracked is logged, never thrown from the IPC listener.
+        trusted.listeners.get(CHANNELS.debugIds)!({ senderFrame: { parent: null } }, many);
+        expect(trusted.logger.error).toHaveBeenCalled();
+        expect(logger.error).not.toHaveBeenCalled();
+    });
+
     it('rejects malformed, untrusted and rate limited requests without posting', async () => {
         const { handlers, event, fetchSpy } = setup();
         const post = handlers.get(CHANNELS.post)!;
@@ -180,6 +330,10 @@ describe('installIpc', () => {
         expect(ipcMain.removeHandler).toHaveBeenCalledWith(CHANNELS.post);
         expect(ipcMain.removeHandler).toHaveBeenCalledWith(CHANNELS.update);
         expect(ipcMain.removeListener).toHaveBeenCalledWith(CHANNELS.hello, expect.any(Function));
+        expect(ipcMain.removeListener).toHaveBeenCalledWith(
+            CHANNELS.debugIds,
+            expect.any(Function),
+        );
     });
 });
 
@@ -209,6 +363,27 @@ describe('validatePostRequest', () => {
             isTopLevel: true,
             capture: 'preload',
         });
+    });
+
+    it('keeps valid debug IDs, drops invalid ones and caps how many it keeps', () => {
+        const request = (debugIds: unknown) =>
+            validatePostRequest({
+                kind: 'crash',
+                error: { message: 'm', stack: 's' },
+                context: {},
+                debugIds,
+            })!;
+        expect(request({ 'a.js': ID_A, 'b.js': 5, 'c.js': 'abc', '': ID_B }).debugIds).toEqual({
+            'a.js': ID_A,
+        });
+        for (const invalid of [undefined, null, 'a.js', 1, [ID_A], { 'a.js': 'abc' }, {}]) {
+            expect(request(invalid).debugIds).toBeUndefined();
+        }
+        const many: Record<string, string> = {};
+        for (let i = 0; i < LIMITS.debugIdsPerReport + 50; i++) {
+            many[`chunk-${i}.js`] = ID_A;
+        }
+        expect(Object.keys(request(many).debugIds ?? {})).toHaveLength(LIMITS.debugIdsPerReport);
     });
 
     it('requires a title for feedback', () => {

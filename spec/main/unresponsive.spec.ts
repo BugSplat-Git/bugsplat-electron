@@ -8,6 +8,7 @@ import {
     installUnresponsive,
 } from '../../src/main/signals/unresponsive';
 import { createTestClient } from '../helpers/client';
+import { ID_A, ID_B, postedDebugMeta } from '../helpers/debug-ids';
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
 
@@ -76,6 +77,7 @@ describe('formatCollectedStack / buildHangError', () => {
 function fakeContents(stack: () => Promise<string | void>) {
     return Object.assign(new EventEmitter(), {
         id: 9,
+        isDestroyed: () => false,
         getURL: () => 'app://page',
         getTitle: () => 'Page',
         getType: () => 'window',
@@ -139,6 +141,43 @@ describe('installUnresponsive', () => {
         contents.emit('unresponsive');
         await flush();
         expect(report).toHaveBeenCalledTimes(2);
+    });
+
+    it('attaches the debug IDs the page registered before it hung', async () => {
+        const HOT = 'app://./assets/index-BX3k.js';
+        const contents = fakeContents(async () => `at spin (${HOT}:1:2345)`);
+        const { client, lastBody } = createTestClient();
+        installUnresponsive(
+            client,
+            {
+                collectStack: true,
+                stackTimeoutMs: 10,
+                enableFeature: true,
+                injectDocumentPolicyHeader: false,
+                reportWithoutStack: true,
+            },
+            client.logger,
+            {
+                app: new EventEmitter() as never,
+                existing: () => [contents as never],
+                isVisible: () => true,
+                now: () => 0,
+            },
+        );
+        client.rendererDebugIds.set(contents as never, {
+            [HOT]: ID_A,
+            'app://./assets/idle.js': ID_B,
+        });
+        contents.emit('unresponsive');
+        await flush();
+        expect(postedDebugMeta(lastBody())).toEqual([{ file: HOT, debugId: ID_A }]);
+    });
+
+    it('reports a hang without debug IDs when the page registered none', async () => {
+        const { contents, report } = setup();
+        contents.emit('unresponsive');
+        await flush();
+        expect(report.mock.calls[0][0].rendererDebugIds).toBeUndefined();
     });
 
     it('tracks webContents created later', async () => {

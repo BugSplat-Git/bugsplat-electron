@@ -4,6 +4,7 @@ import type { Logger } from '../shared/logger';
 import type { ReportOrigin } from '../shared/protocol';
 import { toError } from '../shared/serialize-error';
 import type { Capabilities } from './capabilities';
+import { mergeDebugIds, RendererDebugIds } from './debug-ids';
 import type { IdentityStore } from './identity-store';
 import type { FetchLike, PendingReport, ResolvedOptions } from './options';
 import { mergeReportOptions, runBeforePost } from './report';
@@ -25,6 +26,8 @@ export interface ReportInput {
     contextAttributes?: Record<string, string>;
     /** Skip default `additionalFilePaths` (renderer reports never attach main-process files). */
     skipDefaultFiles?: boolean;
+    /** Source map debug IDs a renderer supplied for the scripts in `error`'s stacks. */
+    rendererDebugIds?: Record<string, string>;
 }
 
 export interface ClientDeps {
@@ -48,6 +51,8 @@ export class BugSplatElectron extends BugSplat {
     readonly capabilities: Capabilities;
     /** Whether `crashReporter.start()` succeeded. */
     nativeStarted = false;
+    /** @internal */
+    readonly rendererDebugIds = new RendererDebugIds();
     private additionalFilePaths: string[];
     private readonly deps: ClientDeps;
 
@@ -188,7 +193,10 @@ export class BugSplatElectron extends BugSplat {
                     this.deps.store.get(),
                     this.deps.sdkVersion,
                     contextAttributes,
-                    options,
+                    {
+                        ...options,
+                        debugIds: mergeDebugIds(input.rendererDebugIds, options.debugIds),
+                    },
                     fileAttachments,
                 ),
             };

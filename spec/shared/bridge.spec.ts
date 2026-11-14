@@ -7,6 +7,7 @@ function fakeIpc(helloResponse: HelloResponse | null) {
     const listeners = new Map<string, (event: unknown, ...args: unknown[]) => void>();
     return {
         ipc: {
+            send: vi.fn(),
             sendSync: vi.fn(() => helloResponse),
             invoke: vi.fn(async () => ({ error: null, response: { crash_id: 1 } })),
             on: vi.fn((channel: string, listener: (event: unknown, ...args: unknown[]) => void) => {
@@ -123,5 +124,21 @@ describe('createBridge', () => {
 
         bridge.claim();
         expect(onClaim).toHaveBeenCalled();
+    });
+
+    it('sends debug IDs to the main process one-way and survives a failing send', () => {
+        const { ipc } = fakeIpc(hello());
+        const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn() };
+        const bridge = createBridge({ ...deps(), ipcRenderer: ipc, logger });
+        const debugIds = { 'app://./index.js': '9f2c1a7e-3b4d-4c5e-8f60-112233445566' };
+        bridge.setDebugIds?.(debugIds);
+        expect(ipc.send).toHaveBeenCalledWith(CHANNELS.debugIds, debugIds);
+        expect(ipc.invoke).not.toHaveBeenCalled();
+
+        ipc.send.mockImplementationOnce(() => {
+            throw new Error('ipc down');
+        });
+        expect(() => bridge.setDebugIds?.(debugIds)).not.toThrow();
+        expect(logger.warn).toHaveBeenCalled();
     });
 });

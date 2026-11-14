@@ -18,6 +18,7 @@ import type {
 import { deserializeError, serializeError, toError } from '../shared/serialize-error';
 import { installCapture } from './capture';
 import { locateBridge } from './bridge-locator';
+import { syncDebugIds, withDebugIds } from './debug-ids';
 
 export const SDK_VERSION: string = __SDK_VERSION__;
 
@@ -168,6 +169,7 @@ export class BugSplatRenderer extends BugSplat {
             },
             original,
             () => super.post(toError(error, location), options),
+            options?.debugIds,
         );
     }
 
@@ -186,6 +188,22 @@ export class BugSplatRenderer extends BugSplat {
             title,
             () => super.postFeedback(title, options),
         );
+    }
+
+    /**
+     * @internal Keep the main process's copy of this page's source map debug IDs current. It
+     * adds them to hang reports, which it builds while this page cannot answer.
+     */
+    startDebugIdSync(): void {
+        const bridge = this.bridge;
+        if (typeof bridge?.setDebugIds !== 'function') {
+            return;
+        }
+        try {
+            syncDebugIds(this.scope, (debugIds) => bridge.setDebugIds?.(debugIds));
+        } catch (error) {
+            this.logger.warn('failed to start the debug ID sync', error);
+        }
     }
 
     /** @internal */
@@ -246,10 +264,11 @@ export class BugSplatRenderer extends BugSplat {
         request: PostRequest,
         original: Error | string,
         http: () => Promise<BugSplatResponse>,
+        debugIds?: Record<string, string>,
     ): Promise<BugSplatResponse> {
         try {
             if (this.bridge) {
-                const result = await this.bridge.post(request);
+                const result = await this.bridge.post(withDebugIds(request, debugIds));
                 return {
                     error: result.error ? new Error(`BugSplat Error: ${result.error}`) : null,
                     response: result.response,
@@ -317,6 +336,7 @@ export function init(options: RendererInitOptions = {}): BugSplatRenderer {
     } catch (error) {
         logger.error('failed to install error capture', error);
     }
+    client.startDebugIdSync();
     if (client.mode === 'http' && !client.database) {
         logger.warn(
             'no preload bridge was found and no database was given: reports cannot be sent from this renderer',
