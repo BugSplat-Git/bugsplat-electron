@@ -8,63 +8,154 @@
         <link rel="stylesheet" href="./assets/css/demo.css" />
     </head>
     <body>
-        <header>
-            <img src="./assets/img/bugsplat-logo.png" alt="BugSplat" class="logo" />
-            <div>
-                <h1>@bugsplat/electron example</h1>
-                <p id="status">initializing…</p>
-            </div>
-        </header>
-
         <main>
-            <section>
-                <h2>JavaScript errors</h2>
-                <div class="buttons">
-                    <button data-scenario="main-throw">Uncaught exception (main)</button>
-                    <button data-scenario="main-reject">Unhandled rejection (main)</button>
-                    <button data-scenario="main-post">Manual post (main)</button>
-                    <button data-scenario="main-post-cause">Post with cause (main)</button>
-                    <button data-scenario="renderer-throw">Uncaught exception (renderer)</button>
-                    <button data-scenario="renderer-reject">Unhandled rejection (renderer)</button>
-                    <button data-scenario="renderer-post">Manual post (renderer)</button>
-                    <button data-scenario="renderer-post-cause">Post with cause (renderer)</button>
-                    <button data-scenario="renderer-feedback">Feedback (renderer)</button>
+            <!-- Top bar: logo + version + connected pill -->
+            <header class="top-bar">
+                <img src="./assets/img/bugsplat-logo.png" alt="BugSplat" class="logo" />
+                <div class="chips">
+                    <span id="version" class="chip"></span>
+                    <span class="chip">
+                        <span id="connected-dot" class="dot"></span>
+                        <span id="connected">Connecting…</span>
+                    </span>
                 </div>
-            </section>
+            </header>
 
-            <section>
-                <h2>Native crashes (Crashpad minidumps)</h2>
-                <div class="buttons">
-                    <button data-scenario="main-crash">process.crash() (main)</button>
-                    <button data-scenario="renderer-crash">process.crash() (renderer)</button>
-                    <button data-scenario="utility-crash">Crash a utility process</button>
-                    <button data-scenario="addon-crash">Crash inside a native addon</button>
-                    <button data-scenario="renderer-oom">Renderer out of memory</button>
-                </div>
-            </section>
+            <!-- Title block -->
+            <div class="title-block">
+                <h1>BugSplat Electron SDK &middot; Demo</h1>
+                <p>Trigger an event. We catch it, group it, and route it to your dashboard.</p>
+            </div>
 
-            <section>
-                <h2>Hangs and identity</h2>
-                <div class="buttons">
-                    <button data-scenario="renderer-hang">
-                        Hang the renderer (~30s to detect)
-                    </button>
-                    <button data-scenario="identity-from-page">
-                        Set identity from page, post, then crash
-                    </button>
-                </div>
-                <form id="identity" class="identity">
-                    <input name="user" placeholder="user" />
-                    <input name="email" placeholder="email" />
-                    <input name="appKey" placeholder="app key" />
-                    <button type="submit">Update identity</button>
-                </form>
-            </section>
+            <h2 class="section-label">Trigger an event</h2>
 
-            <section>
-                <h2>Log</h2>
-                <div id="log" class="log"></div>
-            </section>
+            <!-- Event card grid -->
+            <div class="card-grid">
+                <section class="card event">
+                    <img src="./assets/img/splat_crash.png" alt="" />
+                    <div>
+                        <h3>Crash</h3>
+                        <p>Native crash &middot; Crashpad minidump</p>
+                        <div class="actions">
+                            <button data-scenario="main-crash">Main</button>
+                            <button data-scenario="renderer-crash">Renderer</button>
+                            <button data-scenario="utility-crash">Utility</button>
+                            <button data-scenario="addon-crash">Addon</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card event">
+                    <img src="./assets/img/splat_error.png" alt="" />
+                    <div>
+                        <h3>Uncaught Exception</h3>
+                        <p>Throw an error that nothing catches</p>
+                        <div class="actions">
+                            <button data-scenario="main-throw">Main</button>
+                            <button data-scenario="renderer-throw">Renderer</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card event">
+                    <img src="./assets/img/splat_hang.png" alt="" />
+                    <div>
+                        <h3>Hang</h3>
+                        <p>Freeze the renderer &middot; reported after ~30s</p>
+                        <div class="actions">
+                            <button data-scenario="renderer-hang">JavaScript loop</button>
+                            <button data-scenario="renderer-hang-native">Native</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card event">
+                    <img src="./assets/img/splat_error.png" alt="" />
+                    <div>
+                        <h3>Unhandled Rejection</h3>
+                        <p>Reject a promise that nothing handles</p>
+                        <div class="actions">
+                            <button data-scenario="main-reject">Main</button>
+                            <button data-scenario="renderer-reject">Renderer</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card event">
+                    <img src="./assets/img/splat_hang.png" alt="" />
+                    <div>
+                        <h3>Non-Crash Error</h3>
+                        <p>Post a caught error &middot; app keeps running</p>
+                        <div class="actions">
+                            <button data-scenario="main-post">Main</button>
+                            <button data-scenario="renderer-post">Renderer</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card event">
+                    <img src="./assets/img/splat_feedback.png" alt="" />
+                    <div>
+                        <h3>User Feedback</h3>
+                        <p>Send a note from the renderer</p>
+                        <div class="actions">
+                            <button data-scenario="renderer-feedback">Send feedback</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card event">
+                    <img src="./assets/img/splat_error.png" alt="" />
+                    <div>
+                        <h3>Error Chain</h3>
+                        <p>Post an error with an Error.cause chain</p>
+                        <div class="actions">
+                            <button data-scenario="main-post-cause">Main</button>
+                            <button data-scenario="renderer-post-cause">Renderer</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card event">
+                    <img src="./assets/img/splat_crash.png" alt="" />
+                    <div>
+                        <h3>Out of Memory</h3>
+                        <p>Exhaust the renderer&rsquo;s memory</p>
+                        <div class="actions">
+                            <button data-scenario="renderer-oom">Renderer</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Identity and recent activity -->
+            <div class="bottom-row">
+                <section class="card">
+                    <div class="card-header">
+                        <h2 class="section-label">Identity</h2>
+                        <button data-scenario="identity-from-page" class="link">
+                            Set from page, post, then crash
+                        </button>
+                    </div>
+                    <form id="identity" class="identity">
+                        <input name="user" placeholder="User" />
+                        <input name="email" placeholder="Email" />
+                        <input name="appKey" placeholder="App key" />
+                        <button type="submit" class="primary">Update identity</button>
+                    </form>
+                </section>
+
+                <section class="card">
+                    <div class="card-header">
+                        <h2 class="section-label">Recent activity</h2>
+                        <a id="dashboard" class="link" target="_blank" rel="noreferrer"
+                            >View dashboard &#8599;</a
+                        >
+                    </div>
+                    <div id="log" class="activity"></div>
+                    <p id="log-empty" class="empty">No activity yet.</p>
+                </section>
+            </div>
         </main>
 
         <script src="./vendor/renderer.global.js"></script>
