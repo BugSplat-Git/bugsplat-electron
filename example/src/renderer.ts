@@ -138,8 +138,20 @@ async function runRendererScenario(name: string): Promise<void> {
 
 window.demo.onScenario((name) => void runRendererScenario(name));
 
+// A hang is only reported once the main process is watching for it (Chromium flags a renderer
+// as unresponsive only when it stops answering input), so the hang buttons go through main,
+// which arms the monitor and sends the scenario back here.
+const HANG_SCENARIOS = new Set(['renderer-hang', 'renderer-hang-native']);
+
 document.querySelectorAll<HTMLButtonElement>('button[data-scenario]').forEach((button) => {
-    button.addEventListener('click', () => void runRendererScenario(button.dataset.scenario!));
+    button.addEventListener('click', () => {
+        const name = button.dataset.scenario!;
+        if (HANG_SCENARIOS.has(name)) {
+            void window.demo.run(name).then(log);
+            return;
+        }
+        void runRendererScenario(name);
+    });
 });
 
 const identityForm = document.getElementById('identity') as HTMLFormElement;

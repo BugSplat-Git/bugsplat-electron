@@ -9,8 +9,9 @@
     --badge-bg: #f1efe8;
     --badge-hover: #e6e3d9;
     --link: #1f73e8;
-    --accent: #4e9d78;
-    --accent-hover: #438a69;
+    /* Darker than the shared #4e9d78 / #438a69 so white 13px labels meet WCAG AA (5.0:1, 6.5:1). */
+    --accent: #3d7b5e;
+    --accent-hover: #34684f;
     --connected: #22c55e;
 }
 * {
