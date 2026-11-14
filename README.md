@@ -193,6 +193,29 @@ npx @bugsplat/symbol-upload -i $SYMBOL_UPLOAD_CLIENT_ID -s $SYMBOL_UPLOAD_CLIENT
 
 `symbol-upload` reads `database`, `name` and `version` from `package.json`; create client credentials on BugSplat's [Integrations](https://app.bugsplat.com/v2/settings/database/integrations) page.
 
+### Source map debug IDs
+
+A debug ID is a UUID that a build writes into a JavaScript file and into that file's source map. A report that says which debug ID each file in its stacks has is matched to the source maps of exactly that build, whatever the files are called.
+
+[`@bugsplat/build`](https://www.npmjs.com/package/@bugsplat/build) adds debug IDs to a Vite, Rollup or webpack build and uploads the source maps. An Electron app has a build for the main process, one for each preload script and one for the renderer: add the plugin to every one of them. Each built file then records its debug ID in `globalThis._debugIds` when it loads, in the process and JavaScript world that loaded it. `@bugsplat/electron` reads the IDs from there and adds them to its JavaScript reports. There is nothing to configure, and an app built without debug IDs sends the same reports as before.
+
+| Report                                              | Debug IDs it carries                                                                                                                                                                                            |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JS error in main                                    | Those of the files the main process loaded.                                                                                                                                                                     |
+| JS error in a renderer that calls `init()`          | Those of the page's files. `@bugsplat/electron/renderer` reads them in the page and sends the ones for the files in the error's stacks to the main process with the error.                                      |
+| Renderer hang                                       | Those of the page's files. A hung page cannot answer, so `@bugsplat/electron/renderer` gives the page's IDs to the main process ahead of time: at `init()`, and within about two seconds of more files loading. |
+| Renderer error posted over HTTP (no preload bridge) | Those of the page's files, read by `bugsplat` in the page.                                                                                                                                                      |
+
+Things to know:
+
+- **Call `init()` from `@bugsplat/electron/renderer` in every page.** Only code that runs in the page can read the page's `globalThis._debugIds`. The SDK preload runs in an isolated world with a `globalThis` of its own, so the errors it captures for a page that never calls `init()` carry no debug IDs.
+- **Preload scripts.** With context isolation, a preload script records its debug ID in the isolated world, which `@bugsplat/electron/renderer` in the page cannot read, so a report carries no debug ID for a preload file. With `contextIsolation: false`, the preload and the page share one `globalThis`, and errors and hangs reported from the page carry the preload file's debug ID too. `preload-error` reports never carry debug IDs.
+- **Hangs.** A file that loads less than about two seconds before the page hangs, or while it is hung, may have no debug ID in the hang report.
+- **Out-of-memory crashes** arrive as a minidump; their JavaScript stack carries no debug IDs.
+- **Other contexts.** For an error from a utility process, a worker or any other JavaScript context, call `getDebugIds()` from `bugsplat` in that context, send the result along with the error and pass it to `post(error, { debugIds })`.
+
+Debug IDs need `bugsplat` 9.4.0 or later, which is the peer dependency range of this package.
+
 ## Testing your integration
 
 Run the example app against your own database:
