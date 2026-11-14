@@ -64,6 +64,14 @@ export default defineConfig({
 
 webpack's `EnvironmentPlugin` and esbuild's `--define` do the same. `application` and `version` default to `app.name` and `app.getVersion()`, which Electron reads from `package.json`.
 
+Electron sets `app.name` to `productName` when `package.json` has one, while `symbol-upload` uses `name`. If the two differ, give both the same application name, or your source maps and symbols are uploaded under a different application than your reports. Either pass `application` to `init()`:
+
+```ts
+const bugsplat = init({ database: process.env.BUGSPLAT_DATABASE!, application: 'my-electron-app' });
+```
+
+or pass `-a "My App"` to the `symbol-upload` commands in [Symbols and source maps](#symbols-and-source-maps).
+
 **Renderer** — one line in your page or bundle:
 
 ```ts
@@ -199,7 +207,7 @@ npx @bugsplat/symbol-upload -i $SYMBOL_UPLOAD_CLIENT_ID -s $SYMBOL_UPLOAD_CLIENT
 npx @bugsplat/symbol-upload -i $SYMBOL_UPLOAD_CLIENT_ID -s $SYMBOL_UPLOAD_CLIENT_SECRET -d ./dist -f "**/*.node" -m
 ```
 
-`symbol-upload` reads the database from `BUGSPLAT_DATABASE` and `name` and `version` from `package.json`; create client credentials on BugSplat's [Integrations](https://app.bugsplat.com/v2/settings/database/integrations) page.
+`symbol-upload` reads the database from `BUGSPLAT_DATABASE` and `name` and `version` from `package.json` (add `-a` if your `package.json` has a `productName`, see [Quick start](#quick-start)); create client credentials on BugSplat's [Integrations](https://app.bugsplat.com/v2/settings/database/integrations) page.
 
 ## Testing your integration
 
