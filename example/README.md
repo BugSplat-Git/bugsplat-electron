@@ -14,4 +14,5 @@ Every button triggers one scenario (also reachable as `electron dist/main.js --s
 - `src/main.ts` — `init()` before `app.whenReady()`, `app://` scheme with the `Document-Policy` header for hang call stacks, scenario dispatch
 - `src/preload.ts` — the app's own preload (no BugSplat code; the SDK registers its own preload)
 - `src/renderer.ts` — plain page script calling `BugSplatElectron.init()` from the global build in `dist/vendor/`
+- `scripts/add-debug-ids.mjs` — runs after `tsc` and gives each of the example's own scripts a [source map debug ID](../README.md#source-map-debug-ids), which the JavaScript reports then carry
 - `src/plugin/` + `CMakeLists.txt` — the native addon used by the "crash inside a native addon" scenario
