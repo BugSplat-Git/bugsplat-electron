@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { init } from '../../src/renderer/index';
 import { CHANNELS } from '../../src/shared/protocol';
+import { clearDebugIds, ID_A, ID_B, postedDebugMeta, registerDebugId } from '../helpers/debug-ids';
 
 const win = window as unknown as Record<string, unknown>;
 
@@ -23,6 +24,7 @@ describe('renderer init without a preload bridge', () => {
 
     afterEach(() => {
         vi.unstubAllGlobals();
+        clearDebugIds();
     });
 
     it('falls back to direct HTTP posts when given a database', async () => {
@@ -79,6 +81,31 @@ describe('renderer init without a preload bridge', () => {
         });
     });
 
+    it("posts the page's debug IDs as debugMeta over HTTP", async () => {
+        const INDEX = 'https://example.com/assets/index-BX3k.js';
+        registerDebugId(INDEX, ID_A);
+        registerDebugId('https://example.com/assets/unused.js', ID_B);
+        const fetchSpy = vi.fn(async () => okResponse());
+        vi.stubGlobal('fetch', fetchSpy);
+        const client = init({ database: 'fred', logger: null });
+
+        const error = new Error('manual');
+        error.stack = `Error: manual\n    at save (${INDEX}:1:2345)`;
+        await client.post(error);
+        expect(postedDebugMeta(postedBody(fetchSpy))).toEqual([{ file: INDEX, debugId: ID_A }]);
+
+        fetchSpy.mockClear();
+        await client.reportSerialized(
+            {
+                name: 'TypeError',
+                message: 'captured',
+                stack: `TypeError: captured\n    at ${INDEX}:7:8`,
+            },
+            'renderer.error',
+        );
+        expect(postedDebugMeta(postedBody(fetchSpy))).toEqual([{ file: INDEX, debugId: ID_A }]);
+    });
+
     it('never rejects when the network fails', async () => {
         vi.stubGlobal(
             'fetch',
@@ -127,6 +154,7 @@ describe('renderer init without a preload bridge', () => {
                 },
             })),
             invoke: vi.fn(async () => ({ error: null, response: {} })),
+            send: vi.fn(),
             on: vi.fn(),
         };
         const crashReporter = { addExtraParameter: vi.fn(), removeExtraParameter: vi.fn() };
@@ -136,5 +164,20 @@ describe('renderer init without a preload bridge', () => {
         expect(client.database).toBe('db');
         expect(ipcRenderer.sendSync).toHaveBeenCalledWith(CHANNELS.hello, expect.anything());
         expect(crashReporter.addExtraParameter).toHaveBeenCalledWith('email', 'ipc@x.y');
+    });
+
+    it('registers its debug IDs with the main process over ipcRenderer in ipc mode', () => {
+        registerDebugId('file:///app/renderer.js', ID_A);
+        const ipcRenderer = {
+            sendSync: vi.fn(() => null),
+            invoke: vi.fn(async () => ({ error: null, response: {} })),
+            send: vi.fn(),
+            on: vi.fn(),
+        };
+        win.require = (id: string) => (id === 'electron' ? { ipcRenderer } : {});
+        expect(init({ logger: null }).mode).toBe('ipc');
+        expect(ipcRenderer.send).toHaveBeenCalledWith(CHANNELS.debugIds, {
+            'file:///app/renderer.js': ID_A,
+        });
     });
 });

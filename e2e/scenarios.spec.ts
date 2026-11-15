@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
     electronMajor,
@@ -31,6 +32,24 @@ const exceptions = (request: CapturedRequest): PostedException[] =>
     ).exceptions;
 /** The posted error's own stack. */
 const callstack = (request: CapturedRequest): string => exceptions(request)[0]?.stack ?? '';
+/** The debug ID the example's build wrote into one of its scripts (`//# debugId=<uuid>`). */
+const builtDebugId = (script: string): string =>
+    /\/\/# debugId=([0-9a-f-]{36})/.exec(
+        readFileSync(join(dirname(exampleMain), script), 'utf8'),
+    )?.[1] ?? `no debug ID in ${script}`;
+/**
+ * Assert that the report says which debug ID `script` has, and names the script exactly as
+ * the posted stack does.
+ */
+const expectDebugId = (request: CapturedRequest, script: string): void => {
+    const { debugMeta = [] } = JSON.parse(request.fields.exceptions ?? '{}') as {
+        debugMeta?: Array<{ file: string; debugId: string }>;
+    };
+    const row = debugMeta.find(({ file }) => file.split(/[\\/]/).pop() === script);
+    expect(row, `debugMeta: ${JSON.stringify(debugMeta)}`).toBeDefined();
+    expect(row?.debugId).toBe(builtDebugId(script));
+    expect(callstack(request)).toContain(`${row?.file}:`);
+};
 /** Crashpad names the process type `process_type` on recent Electron and `ptype` on older Linux builds. */
 const processType = (request: CapturedRequest): string | undefined =>
     request.fields.process_type ?? request.fields.ptype;
@@ -106,6 +125,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         expectIdentity(report.fields, false);
         expect(callstack(report)).toContain('main-throw');
         expect(callstack(report)).toContain('crasher.js');
+        expectDebugId(report, 'crasher.js');
         expect(attrs(report)).toMatchObject({
             'bugsplat.origin': 'main.uncaughtException',
             'bugsplat.processType': 'browser',
@@ -149,6 +169,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         expectIdentity(report.fields, false);
         expect(callstack(report)).toContain('renderer-throw');
         expect(callstack(report)).toContain('renderer.js');
+        expectDebugId(report, 'renderer.js');
         expect(attrs(report)).toMatchObject({
             'bugsplat.origin': 'renderer.error',
             'bugsplat.processType': 'renderer',
@@ -281,6 +302,7 @@ describe('@bugsplat/electron end-to-end (example app)', () => {
         });
         expect(callstack(report)).toContain('RendererUnresponsive');
         expect(callstack(report)).toContain('renderer.js');
+        expectDebugId(report, 'renderer.js');
     }, 120_000);
 
     it('renderer-hang (file://): pages loaded with loadFile cannot opt in to call stacks', async () => {

@@ -1,5 +1,11 @@
 import type { IdentityPatch, IdentitySnapshot } from './identity';
 
+/**
+ * Bump only for a change that an older main process, preload or renderer SDK cannot ignore.
+ * Optional additions do not need it: the main process rebuilds every request from the fields
+ * it knows, a one-way message on a channel it does not listen on is dropped, and the renderer
+ * SDK checks that a bridge method exists before calling it.
+ */
 export const PROTOCOL_VERSION = 1;
 
 /** Name of the bridge object exposed on `window` by the preload script. */
@@ -14,6 +20,8 @@ export const CHANNELS = {
     update: 'bugsplat:update',
     /** main → frame, `webFrameMain.send`. */
     identity: 'bugsplat:identity',
+    /** renderer → main, `ipcRenderer.send` (one-way). */
+    debugIds: 'bugsplat:debug-ids',
 } as const;
 
 export const LIMITS = {
@@ -23,6 +31,15 @@ export const LIMITS = {
     attributeValueBytes: 20320,
     attachmentBytes: 10 * 1024 * 1024,
     causeDepth: 3,
+    /** Source map debug IDs sent with one report. */
+    debugIdsPerReport: 128,
+    /** Source map debug IDs a page registers with the main process for hang reports. */
+    debugIdsPerPage: 1024,
+    /** Length of one file name (UTF-16 code units, like the two below). */
+    debugIdFileLength: 2048,
+    /** Summed length of the file names in one set of debug IDs. */
+    debugIdFilesLength: 256 * 1024,
+    debugIdLength: 64,
 } as const;
 
 export interface CaptureConfig {
@@ -103,6 +120,11 @@ export interface PostRequest {
     title?: string;
     options?: SerializedPostOptions;
     context: RendererContext;
+    /**
+     * Source map debug IDs of the scripts named in `error`'s stacks: file, exactly as the stack
+     * frames name it, to the debug ID its build wrote.
+     */
+    debugIds?: Record<string, string>;
 }
 
 export interface PostResult {
@@ -128,4 +150,10 @@ export interface BugSplatBridge {
     update(patch: IdentityPatch): Promise<void>;
     /** Called by the renderer SDK once it owns error capture; the preload stops its fallback capture. */
     claim(): void;
+    /**
+     * Replace the source map debug IDs the main process keeps for this page (file to debug ID).
+     * It adds them to hang reports, which it builds while the page cannot answer. Missing on
+     * bridges exposed by a preload older than this method.
+     */
+    setDebugIds?(debugIds: Record<string, string>): void;
 }

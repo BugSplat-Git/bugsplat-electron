@@ -1,8 +1,16 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestClient, okResponse, postedExceptions } from '../helpers/client';
+import {
+    clearDebugIds,
+    ID_A,
+    ID_B,
+    ID_C,
+    postedDebugMeta,
+    registerDebugId,
+} from '../helpers/debug-ids';
 
 describe('BugSplatElectron', () => {
     it('posts with merged identity, notes and context attributes', async () => {
@@ -155,6 +163,71 @@ describe('BugSplatElectron', () => {
             'bugsplat.origin': 'renderer.error',
             'bugsplat.processType': 'renderer',
             'bugsplat.url': 'app://x',
+        });
+    });
+
+    describe('source map debug IDs', () => {
+        afterEach(clearDebugIds);
+
+        it('posts no debugMeta when no script registered a debug ID', async () => {
+            const { client, lastBody } = createTestClient();
+            await client.post(new Error('boom'));
+            expect(Object.keys(JSON.parse(String(lastBody().get('exceptions'))))).toEqual([
+                'exceptions',
+            ]);
+        });
+
+        it("picks up a main-process script's debug ID from globalThis._debugIds", async () => {
+            // What the build appends to a script: register under the stack of an Error made here.
+            const scope = globalThis as { _debugIds?: Record<string, string> };
+            scope._debugIds = scope._debugIds || {};
+            scope._debugIds[new Error().stack!] = ID_A;
+
+            const { client, lastBody } = createTestClient();
+            await client.post(new Error('thrown by this file'));
+
+            const [row, ...rest] = postedDebugMeta(lastBody()) ?? [];
+            expect(rest).toEqual([]);
+            expect(row.debugId).toBe(ID_A);
+            expect(row.file).toMatch(/client\.spec\.ts$/);
+            expect(postedExceptions(lastBody())[0].stack).toContain(`${row.file}:`);
+        });
+
+        it('passes the debugIds option of post() to bugsplat, where it wins', async () => {
+            registerDebugId('/app/dist/main.js', ID_A);
+            const { client, lastBody } = createTestClient();
+            const error = new Error('explicit');
+            error.stack =
+                'Error: explicit\n    at run (/app/dist/main.js:1:2)\n    at /app/dist/worker.js:3:4';
+            await client.post(error, {
+                debugIds: { '/app/dist/main.js': ID_B, '/app/dist/worker.js': ID_C },
+            });
+            expect(postedDebugMeta(lastBody())).toEqual([
+                { file: '/app/dist/main.js', debugId: ID_B },
+                { file: '/app/dist/worker.js', debugId: ID_C },
+            ]);
+        });
+
+        it("ranks a renderer's IDs below the main process's own and shows the result to beforePost", async () => {
+            registerDebugId('/app/dist/main.js', ID_A);
+            const beforePost = vi.fn();
+            const { client, lastBody } = createTestClient({ beforePost });
+            const error = new Error('from a renderer');
+            error.stack =
+                'Error: from a renderer\n    at app://./index.js:1:2\n    at /app/dist/main.js:3:4';
+            await client.report({
+                kind: 'crash',
+                origin: 'renderer.error',
+                error,
+                rendererDebugIds: { 'app://./index.js': ID_B, '/app/dist/main.js': ID_C },
+            });
+            expect(beforePost.mock.calls[0][0].options.debugIds).toEqual({
+                'app://./index.js': ID_B,
+            });
+            expect(postedDebugMeta(lastBody())).toEqual([
+                { file: 'app://./index.js', debugId: ID_B },
+                { file: '/app/dist/main.js', debugId: ID_A },
+            ]);
         });
     });
 

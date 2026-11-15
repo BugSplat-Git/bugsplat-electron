@@ -28,6 +28,7 @@ export function mergeReportOptions(
         description: options?.description || identity.description,
         attributes,
         attachments: [...(options?.attachments ?? []), ...extraAttachments],
+        debugIds: options?.debugIds,
     };
 }
 

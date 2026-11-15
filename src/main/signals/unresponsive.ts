@@ -134,6 +134,7 @@ export function installUnresponsive(
                     kind: 'crash',
                     origin: 'unresponsive',
                     error: buildHangError(`Renderer unresponsive: ${target}`, collected),
+                    rendererDebugIds: client.rendererDebugIds.get(contents),
                     contextAttributes: {
                         'bugsplat.processType': 'renderer',
                         'bugsplat.reason': 'unresponsive',

@@ -22,6 +22,7 @@ import {
     type ReportOrigin,
     type SerializedError,
 } from '../shared/protocol';
+import { sanitizeDebugIds } from '../shared/debug-ids';
 import { deserializeError } from '../shared/serialize-error';
 import { truncateUtf8 } from '../shared/text';
 import type { BugSplatElectron } from './client';
@@ -127,6 +128,7 @@ export function validatePostRequest(raw: unknown): PostRequest | null {
     }
     const options = isRecord(raw.options) ? raw.options : {};
     const context = isRecord(raw.context) ? raw.context : {};
+    const debugIds = sanitizeDebugIds(raw.debugIds, LIMITS.debugIdsPerReport);
     return {
         kind,
         origin,
@@ -146,6 +148,7 @@ export function validatePostRequest(raw: unknown): PostRequest | null {
             isTopLevel: context.isTopLevel !== false,
             capture: context.capture === 'preload' ? 'preload' : 'renderer',
         },
+        debugIds: Object.keys(debugIds).length > 0 ? debugIds : undefined,
     };
 }
 
@@ -350,6 +353,7 @@ export function installIpc(
                 options: request.options,
                 contextAttributes,
                 skipDefaultFiles: true,
+                rendererDebugIds: request.debugIds,
             });
             return {
                 error: result.error ? result.error.message : null,
@@ -378,7 +382,23 @@ export function installIpc(
         }
     };
 
+    const onDebugIds = (event: IpcMainEvent, raw: unknown): void => {
+        try {
+            // Hang stacks are collected from the main frame, so only its scripts are of use.
+            if (!trust(event) || !trustTopLevelFrames(event)) {
+                return;
+            }
+            client.rendererDebugIds.set(
+                event.sender,
+                sanitizeDebugIds(raw, LIMITS.debugIdsPerPage),
+            );
+        } catch (error) {
+            logger.error('debug ID handler failed', error);
+        }
+    };
+
     deps.ipcMain.on(CHANNELS.hello, onHello);
+    deps.ipcMain.on(CHANNELS.debugIds, onDebugIds);
     deps.ipcMain.handle(CHANNELS.post, onPost);
     deps.ipcMain.handle(CHANNELS.update, onUpdate);
     const unsubscribe = client.store.subscribe((snapshot) =>
@@ -388,6 +408,7 @@ export function installIpc(
     return () => {
         unsubscribe();
         deps.ipcMain.removeListener(CHANNELS.hello, onHello);
+        deps.ipcMain.removeListener(CHANNELS.debugIds, onDebugIds);
         deps.ipcMain.removeHandler(CHANNELS.post);
         deps.ipcMain.removeHandler(CHANNELS.update);
     };
