@@ -31,6 +31,28 @@ describe('RendererDebugIds', () => {
         contents.emit('destroyed');
         expect(store.get(contents)).toBeUndefined();
         expect(contents.listenerCount('destroyed')).toBe(0);
+        expect(contents.listenerCount('did-navigate')).toBe(0);
+    });
+
+    it('forgets the IDs when a new document commits, but not on a same-document navigation', () => {
+        const store = new RendererDebugIds();
+        const contents = fakeContents();
+        store.set(contents, { 'a.js': ID_A });
+        contents.emit('did-navigate-in-page');
+        expect(store.get(contents)).toEqual({ 'a.js': ID_A });
+        contents.emit('did-navigate');
+        expect(store.get(contents)).toBeUndefined();
+    });
+
+    it('keeps one navigation listener across documents', () => {
+        const store = new RendererDebugIds();
+        const contents = fakeContents();
+        store.set(contents, { 'a.js': ID_A });
+        contents.emit('did-navigate');
+        store.set(contents, { 'b.js': ID_B });
+        expect(store.get(contents)).toEqual({ 'b.js': ID_B });
+        expect(contents.listenerCount('did-navigate')).toBe(1);
+        expect(contents.listenerCount('destroyed')).toBe(1);
     });
 
     it('ignores a webContents that is already destroyed', () => {
@@ -39,6 +61,7 @@ describe('RendererDebugIds', () => {
         store.set(contents, { 'a.js': ID_A });
         expect(store.get(contents)).toBeUndefined();
         expect(contents.listenerCount('destroyed')).toBe(0);
+        expect(contents.listenerCount('did-navigate')).toBe(0);
     });
 });
 

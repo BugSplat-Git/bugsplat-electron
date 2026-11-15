@@ -7,20 +7,41 @@ import type { WebContents } from 'electron';
  */
 export class RendererDebugIds {
     private readonly byContents = new WeakMap<WebContents, Record<string, string>>();
+    private readonly watched = new WeakSet<WebContents>();
 
-    /** Replace what `contents` registered. The entry is removed when `contents` is destroyed. */
+    /**
+     * Replace what `contents` registered. The entry is removed when a new document commits in
+     * `contents` and when `contents` is destroyed.
+     */
     set(contents: WebContents, debugIds: Record<string, string>): void {
         if (contents.isDestroyed()) {
             return;
         }
-        if (!this.byContents.has(contents)) {
-            contents.once('destroyed', () => this.byContents.delete(contents));
-        }
+        this.watch(contents);
         this.byContents.set(contents, debugIds);
     }
 
     get(contents: WebContents): Record<string, string> | undefined {
         return this.byContents.get(contents);
+    }
+
+    private watch(contents: WebContents): void {
+        if (this.watched.has(contents)) {
+            return;
+        }
+        this.watched.add(contents);
+        // A webContents outlives its documents. A reload or `loadURL()` commits a new document
+        // whose scripts have not registered yet (and a page with none never will), so the old IDs
+        // must not resolve its hangs. `did-navigate` fires only for main-frame, cross-document
+        // commits; a same-document navigation fires `did-navigate-in-page` and keeps them.
+        const forget = (): void => {
+            this.byContents.delete(contents);
+        };
+        contents.on('did-navigate', forget);
+        contents.once('destroyed', () => {
+            contents.off('did-navigate', forget);
+            forget();
+        });
     }
 }
 
