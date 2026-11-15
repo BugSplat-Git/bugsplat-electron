@@ -46,6 +46,8 @@ p {
 /* Top bar */
 .top-bar {
     display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 18px;
@@ -158,6 +160,8 @@ p {
 }
 .card-header {
     display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
@@ -204,10 +208,12 @@ input {
 }
 .identity {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
 }
 .identity input {
-    flex: 1;
+    /* The three inputs and the button share one line at the default window size and wrap below it. */
+    flex: 1 1 120px;
     min-width: 0;
     min-height: 36px;
     padding: 8px 10px;
@@ -253,4 +259,24 @@ button.primary:hover {
 .empty {
     font-size: 13px;
     color: var(--text-tertiary);
+}
+
+/* Narrow windows and high zoom: fewer event columns and a stacked bottom row, so nothing scrolls sideways. */
+@media (max-width: 1000px) {
+    .card-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 860px) {
+    .bottom-row {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 560px) {
+    main {
+        padding: 16px;
+    }
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
 }
