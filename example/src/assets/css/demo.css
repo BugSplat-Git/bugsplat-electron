@@ -1,77 +1,282 @@
+/* BugSplat sample design system (shared with the WinUI 3 samples in bugsplat-windows). */
+:root {
+    --screen-bg: #faf8f2;
+    --card-bg: #ffffff;
+    --card-stroke: #eceae2;
+    --text-primary: #0e1116;
+    --text-secondary: #4b5563;
+    --text-tertiary: #6b7280;
+    --badge-bg: #f1efe8;
+    --badge-hover: #e6e3d9;
+    --link: #1f73e8;
+    /* Darker than the shared #4e9d78 / #438a69 so white 13px labels meet WCAG AA (5.0:1, 6.5:1). */
+    --accent: #3d7b5e;
+    --accent-hover: #34684f;
+    --connected: #22c55e;
+}
 * {
     box-sizing: border-box;
 }
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #f5f6f8;
-    color: #1f2933;
-}
-header {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 16px 24px;
-    background: #fff;
-    border-bottom: 1px solid #e0e4e8;
-}
-header .logo {
-    height: 48px;
-}
-header h1 {
-    margin: 0;
-    font-size: 20px;
-}
-header p {
-    margin: 4px 0 0;
-    color: #52606d;
+    font-family:
+        'Segoe UI Variable',
+        'Segoe UI',
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        Roboto,
+        sans-serif;
     font-size: 13px;
+    background: var(--screen-bg);
+    color: var(--text-primary);
 }
 main {
-    padding: 16px 24px;
-    display: grid;
-    gap: 16px;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 32px 28px;
 }
-section {
-    background: #fff;
-    border: 1px solid #e0e4e8;
-    border-radius: 8px;
-    padding: 16px;
+h1,
+h2,
+h3,
+p {
+    margin: 0;
 }
-h2 {
-    margin: 0 0 12px;
+
+/* Top bar */
+.top-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+.logo {
+    height: 26px;
+}
+.chips {
+    display: flex;
+    gap: 10px;
+}
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: var(--badge-bg);
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+}
+.dot.on {
+    background: var(--connected);
+}
+
+/* Title block */
+.title-block {
+    margin-bottom: 22px;
+}
+.title-block h1 {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+.title-block p {
+    margin-top: 6px;
     font-size: 15px;
+    color: var(--text-secondary);
 }
-.buttons,
+.section-label {
+    margin: 0 0 10px 2px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+}
+
+/* Cards */
+.card {
+    margin-bottom: 14px;
+    padding: 16px;
+    border: 1px solid var(--card-stroke);
+    border-radius: 14px;
+    background: var(--card-bg);
+}
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 14px;
+}
+.card-grid .card {
+    margin-bottom: 0;
+}
+.card.event {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    grid-template-rows: auto auto 1fr;
+    column-gap: 12px;
+}
+.card.event > div {
+    display: contents;
+}
+.card.event > img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+}
+.card.event h3 {
+    align-self: center;
+    font-size: 16px;
+    font-weight: 600;
+}
+.card.event p {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.card.event .actions {
+    grid-column: 1 / -1;
+    align-self: end;
+}
+
+/* Identity and recent activity share the bottom row. */
+.bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+.bottom-row .card {
+    margin-bottom: 0;
+}
+.card-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.card-header .section-label {
+    margin: 0;
+}
+
+/* Buttons and inputs */
+button,
+input {
+    font: inherit;
+}
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+}
+.actions button {
+    padding: 5px 9px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--badge-bg);
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.actions button:hover {
+    background: var(--badge-hover);
+}
+.link {
+    padding: 0 4px;
+    border: 0;
+    background: none;
+    color: var(--link);
+    font-size: 13px;
+    text-decoration: none;
+    cursor: pointer;
+}
+.link:hover {
+    text-decoration: underline;
+}
 .identity {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
 }
-.identity {
-    margin-top: 12px;
+.identity input {
+    /* The three inputs and the button share one line at the default window size and wrap below it. */
+    flex: 1 1 120px;
+    min-width: 0;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 1px solid var(--card-stroke);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-primary);
 }
-button,
-input {
-    font: inherit;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid #cbd2d9;
-    background: #fff;
+.identity input::placeholder {
+    color: var(--text-tertiary);
 }
-button {
+button.primary {
+    padding: 8px 16px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #ffffff;
+    font-weight: 600;
     cursor: pointer;
-    background: #1f2933;
-    color: #fff;
-    border-color: #1f2933;
 }
-button:hover {
-    background: #323f4b;
+button.primary:hover {
+    background: var(--accent-hover);
 }
-.log {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 12px;
-    max-height: 200px;
+
+/* Recent activity */
+.activity {
+    display: grid;
+    gap: 8px;
+    max-height: 62px;
     overflow: auto;
-    white-space: pre-wrap;
+}
+.activity .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+}
+.activity .when {
+    flex: none;
+    font-size: 12px;
+    opacity: 0.6;
+}
+.empty {
+    font-size: 13px;
+    color: var(--text-tertiary);
+}
+
+/* Narrow windows and high zoom: fewer event columns and a stacked bottom row, so nothing scrolls sideways. */
+@media (max-width: 1000px) {
+    .card-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 860px) {
+    .bottom-row {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 560px) {
+    main {
+        padding: 16px;
+    }
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
 }

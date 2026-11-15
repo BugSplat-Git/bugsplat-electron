@@ -1,16 +1,31 @@
 // Page script (plain <script>, no bundler). One line initializes BugSplat in this renderer.
 const client = BugSplatElectron.init({ attributes: { page: 'index' } });
 
-const statusEl = document.getElementById('status')!;
 const logEl = document.getElementById('log')!;
+const logEmptyEl = document.getElementById('log-empty')!;
 
+// Adds a row to the Recent activity card, newest first.
 function log(message: string): void {
-    const line = document.createElement('div');
-    line.textContent = `${new Date().toLocaleTimeString()}  ${message}`;
-    logEl.prepend(line);
+    const row = document.createElement('div');
+    row.className = 'row';
+    const what = document.createElement('span');
+    what.textContent = message;
+    const when = document.createElement('span');
+    when.className = 'when';
+    when.textContent = new Date().toLocaleTimeString();
+    row.append(what, when);
+    logEl.prepend(row);
+    logEmptyEl.hidden = true;
 }
 
-statusEl.textContent = `Electron ${window.demo.versions.electron} · Chromium ${window.demo.versions.chrome} · mode: ${client.mode} · database: ${client.database || '(none)'}`;
+document.getElementById('version')!.textContent = `Electron ${window.demo.versions.electron}`;
+document.getElementById('connected')!.textContent = client.database ? 'Connected' : 'No database';
+document.getElementById('connected-dot')!.classList.toggle('on', Boolean(client.database));
+if (client.database) {
+    (document.getElementById('dashboard') as HTMLAnchorElement).href =
+        `https://app.bugsplat.com/v2/crashes?database=${encodeURIComponent(client.database)}`;
+}
+log(`Ready · mode: ${client.mode} · database: ${client.database || '(none)'}`);
 
 // A few frames so renderer stacks look like real application code.
 function rendererFrame0(message: string): never {
@@ -123,8 +138,20 @@ async function runRendererScenario(name: string): Promise<void> {
 
 window.demo.onScenario((name) => void runRendererScenario(name));
 
+// A hang is only reported once the main process is watching for it (Chromium flags a renderer
+// as unresponsive only when it stops answering input), so the hang buttons go through main,
+// which arms the monitor and sends the scenario back here.
+const HANG_SCENARIOS = new Set(['renderer-hang', 'renderer-hang-native']);
+
 document.querySelectorAll<HTMLButtonElement>('button[data-scenario]').forEach((button) => {
-    button.addEventListener('click', () => void runRendererScenario(button.dataset.scenario!));
+    button.addEventListener('click', () => {
+        const name = button.dataset.scenario!;
+        if (HANG_SCENARIOS.has(name)) {
+            void window.demo.run(name).then(log);
+            return;
+        }
+        void runRendererScenario(name);
+    });
 });
 
 const identityForm = document.getElementById('identity') as HTMLFormElement;
