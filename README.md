@@ -30,14 +30,10 @@ Supported: Electron 35 and later (OOM crash keys need 42.10.1+). Before you star
 npm i @bugsplat/electron
 ```
 
-`bugsplat` is a peer dependency and is installed automatically by npm 7+. Add your BugSplat database to `package.json` so both the SDK and [`@bugsplat/symbol-upload`](https://github.com/BugSplat-Git/symbol-upload) can read it:
+`bugsplat` is a peer dependency and is installed automatically by npm 7+. Set a `BUGSPLAT_DATABASE` environment variable to your BugSplat database on the machine that builds your app. [`@bugsplat/symbol-upload`](https://github.com/BugSplat-Git/symbol-upload) reads the same variable, so the SDK and your symbol uploads share one value and the database stays out of your repository:
 
-```json
-{
-    "name": "my-electron-app",
-    "version": "1.0.0",
-    "database": "fred"
-}
+```sh
+export BUGSPLAT_DATABASE=fred
 ```
 
 ## Quick start
@@ -47,14 +43,34 @@ npm i @bugsplat/electron
 ```ts
 import { init } from '@bugsplat/electron';
 
-const { database, name, version } = require('./package.json');
-
-const bugsplat = init({ database, application: name, version });
+const bugsplat = init({ database: process.env.BUGSPLAT_DATABASE! });
 
 bugsplat.setUser('Fred');
 bugsplat.setEmail('fred@bedrock.com');
 bugsplat.setAttribute('plan', 'pro');
 ```
+
+`BUGSPLAT_DATABASE` is not set on your users' machines, so have your bundler replace `process.env.BUGSPLAT_DATABASE` with its value at build time. With Vite, add a `define` entry to the main-process config:
+
+```ts
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+    define: {
+        'process.env.BUGSPLAT_DATABASE': JSON.stringify(process.env.BUGSPLAT_DATABASE),
+    },
+});
+```
+
+webpack's `EnvironmentPlugin` and esbuild's `--define` do the same. `application` and `version` default to `app.name` and `app.getVersion()`, which Electron reads from `package.json`.
+
+Electron sets `app.name` to `productName` when `package.json` has one, while `symbol-upload` uses `name`. If the two differ, give both the same application name, or your source maps and symbols are uploaded under a different application than your reports. Either pass `application` to `init()`:
+
+```ts
+const bugsplat = init({ database: process.env.BUGSPLAT_DATABASE!, application: 'my-electron-app' });
+```
+
+or pass `-a "My App"` to the `symbol-upload` commands in [Symbols and source maps](#symbols-and-source-maps).
 
 **Renderer** — one line in your page or bundle:
 
@@ -191,7 +207,7 @@ npx @bugsplat/symbol-upload -i $SYMBOL_UPLOAD_CLIENT_ID -s $SYMBOL_UPLOAD_CLIENT
 npx @bugsplat/symbol-upload -i $SYMBOL_UPLOAD_CLIENT_ID -s $SYMBOL_UPLOAD_CLIENT_SECRET -d ./dist -f "**/*.node" -m
 ```
 
-`symbol-upload` reads `database`, `name` and `version` from `package.json`; create client credentials on BugSplat's [Integrations](https://app.bugsplat.com/v2/settings/database/integrations) page.
+`symbol-upload` reads the database from `BUGSPLAT_DATABASE` and `name` and `version` from `package.json` (add `-a` if your `package.json` has a `productName`, see [Quick start](#quick-start)); create client credentials on BugSplat's [Integrations](https://app.bugsplat.com/v2/settings/database/integrations) page.
 
 ## Testing your integration
 
